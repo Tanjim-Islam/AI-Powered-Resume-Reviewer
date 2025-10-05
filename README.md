@@ -42,7 +42,7 @@ MODEL_DEFAULT=meta-llama/llama-3.1-70b-instruct
 
 # Gemini Configuration
 GEMINI_API_KEY=your_gemini_api_key_here
-GEMINI_MODEL=gemini-1.5-pro
+GEMINI_MODEL=gemini-2.5-pro
 
 # Provider Selection (set to true to force Gemini even if OpenRouter is available)
 GEMINI_ONLY=false
