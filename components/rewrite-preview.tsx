@@ -1,0 +1,688 @@
+"use client";
+
+import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import {
+  Download,
+  Copy,
+  Eye,
+  Edit3,
+  FileText,
+  Sparkles,
+  Loader2,
+  CheckCircle,
+} from "lucide-react";
+import { RewriteResponse } from "@/lib/schemas";
+
+interface RewritePreviewProps {
+  rewriteData: RewriteResponse;
+  onExport: (format: "docx" | "pdf") => Promise<void>;
+  isExporting: boolean;
+}
+
+export function RewritePreview({
+  rewriteData,
+  onExport,
+  isExporting,
+}: RewritePreviewProps) {
+  const [activeTab, setActiveTab] = useState("markdown");
+  const [editableData, setEditableData] = useState(rewriteData.json);
+  const [copiedItems, setCopiedItems] = useState<Set<string>>(new Set());
+
+  const copyToClipboard = async (text: string, itemId: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedItems((prev) => new Set(prev).add(itemId));
+      setTimeout(() => {
+        setCopiedItems((prev) => {
+          const newSet = new Set(prev);
+          newSet.delete(itemId);
+          return newSet;
+        });
+      }, 2000);
+    } catch (error) {
+      console.error("Failed to copy:", error);
+    }
+  };
+
+  const updateField = (section: string, field: string, value: string) => {
+    setEditableData((prev) => ({
+      ...prev,
+      [section]: {
+        ...prev[section as keyof typeof prev],
+        [field]: value,
+      },
+    }));
+  };
+
+  const updateArrayField = (
+    section: string,
+    index: number,
+    field: string,
+    value: string
+  ) => {
+    setEditableData((prev) => ({
+      ...prev,
+      [section]: prev[section as keyof typeof prev].map(
+        (item: any, i: number) =>
+          i === index ? { ...item, [field]: value } : item
+      ),
+    }));
+  };
+
+  const addArrayItem = (section: string, newItem: any) => {
+    setEditableData((prev) => ({
+      ...prev,
+      [section]: [...prev[section as keyof typeof prev], newItem],
+    }));
+  };
+
+  const removeArrayItem = (section: string, index: number) => {
+    setEditableData((prev) => ({
+      ...prev,
+      [section]: prev[section as keyof typeof prev].filter(
+        (_: any, i: number) => i !== index
+      ),
+    }));
+  };
+
+  return (
+    <div className="max-w-6xl mx-auto">
+      <div className="text-center mb-8">
+        <h2 className="text-3xl font-bold text-gray-800 mb-2">
+          AI-Rewritten Resume
+        </h2>
+        <p className="text-gray-600">
+          Review and customize your improved resume
+        </p>
+      </div>
+
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+        <TabsList className="grid w-full grid-cols-2 mb-6">
+          <TabsTrigger value="markdown" className="flex items-center">
+            <Eye className="w-4 h-4 mr-2" />
+            Preview
+          </TabsTrigger>
+          <TabsTrigger value="edit" className="flex items-center">
+            <Edit3 className="w-4 h-4 mr-2" />
+            Edit
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="markdown" className="space-y-6">
+          <Card className="p-6 bg-white/80 backdrop-blur-sm border-white/20">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-800">
+                Markdown Preview
+              </h3>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  copyToClipboard(rewriteData.markdown, "markdown")
+                }
+              >
+                <Copy className="w-4 h-4 mr-2" />
+                Copy Markdown
+              </Button>
+            </div>
+            <div className="prose max-w-none">
+              <pre className="whitespace-pre-wrap text-sm text-gray-700 bg-gray-50 p-4 rounded-lg overflow-x-auto">
+                {rewriteData.markdown}
+              </pre>
+            </div>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="edit" className="space-y-6">
+          {/* Header Section */}
+          <Card className="p-6 bg-white/80 backdrop-blur-sm border-white/20">
+            <h3 className="text-lg font-semibold text-gray-800 mb-4">
+              Header Information
+            </h3>
+            <div className="grid md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Full Name
+                </label>
+                <Input
+                  value={editableData.header.name}
+                  onChange={(e) =>
+                    updateField("header", "name", e.target.value)
+                  }
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Job Title
+                </label>
+                <Input
+                  value={editableData.header.title || ""}
+                  onChange={(e) =>
+                    updateField("header", "title", e.target.value)
+                  }
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Location
+                </label>
+                <Input
+                  value={editableData.header.location || ""}
+                  onChange={(e) =>
+                    updateField("header", "location", e.target.value)
+                  }
+                />
+              </div>
+            </div>
+          </Card>
+
+          {/* Summary Section */}
+          <Card className="p-6 bg-white/80 backdrop-blur-sm border-white/20">
+            <h3 className="text-lg font-semibold text-gray-800 mb-4">
+              Professional Summary
+            </h3>
+            <Textarea
+              value={editableData.summary}
+              onChange={(e) =>
+                setEditableData((prev) => ({
+                  ...prev,
+                  summary: e.target.value,
+                }))
+              }
+              className="min-h-32"
+            />
+          </Card>
+
+          {/* Skills Section */}
+          <Card className="p-6 bg-white/80 backdrop-blur-sm border-white/20">
+            <h3 className="text-lg font-semibold text-gray-800 mb-4">Skills</h3>
+            <div className="space-y-4">
+              {editableData.skills.map((skillGroup, index) => (
+                <div
+                  key={index}
+                  className="border border-gray-200 rounded-lg p-4"
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <Input
+                      value={skillGroup.group}
+                      onChange={(e) =>
+                        updateArrayField(
+                          "skills",
+                          index,
+                          "group",
+                          e.target.value
+                        )
+                      }
+                      className="font-medium"
+                    />
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => removeArrayItem("skills", index)}
+                      className="text-red-500 hover:text-red-700"
+                    >
+                      Remove
+                    </Button>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {skillGroup.items.map((item, itemIndex) => (
+                      <div key={itemIndex} className="flex items-center">
+                        <Input
+                          value={item}
+                          onChange={(e) => {
+                            const newItems = [...skillGroup.items];
+                            newItems[itemIndex] = e.target.value;
+                            updateArrayField(
+                              "skills",
+                              index,
+                              "items",
+                              newItems.join(", ")
+                            );
+                          }}
+                          className="w-auto min-w-0"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+              <Button
+                variant="outline"
+                onClick={() =>
+                  addArrayItem("skills", { group: "New Category", items: [] })
+                }
+              >
+                Add Skill Category
+              </Button>
+            </div>
+          </Card>
+
+          {/* Experience Section */}
+          <Card className="p-6 bg-white/80 backdrop-blur-sm border-white/20">
+            <h3 className="text-lg font-semibold text-gray-800 mb-4">
+              Work Experience
+            </h3>
+            <div className="space-y-6">
+              {editableData.experience.map((exp, index) => (
+                <div
+                  key={index}
+                  className="border border-gray-200 rounded-lg p-4"
+                >
+                  <div className="grid md:grid-cols-2 gap-4 mb-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Company
+                      </label>
+                      <Input
+                        value={exp.company}
+                        onChange={(e) =>
+                          updateArrayField(
+                            "experience",
+                            index,
+                            "company",
+                            e.target.value
+                          )
+                        }
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Role
+                      </label>
+                      <Input
+                        value={exp.role}
+                        onChange={(e) =>
+                          updateArrayField(
+                            "experience",
+                            index,
+                            "role",
+                            e.target.value
+                          )
+                        }
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Start Date
+                      </label>
+                      <Input
+                        value={exp.start}
+                        onChange={(e) =>
+                          updateArrayField(
+                            "experience",
+                            index,
+                            "start",
+                            e.target.value
+                          )
+                        }
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        End Date
+                      </label>
+                      <Input
+                        value={exp.end}
+                        onChange={(e) =>
+                          updateArrayField(
+                            "experience",
+                            index,
+                            "end",
+                            e.target.value
+                          )
+                        }
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Achievements
+                    </label>
+                    <div className="space-y-2">
+                      {exp.bullets.map((bullet, bulletIndex) => (
+                        <div
+                          key={bulletIndex}
+                          className="flex items-center gap-2"
+                        >
+                          <Input
+                            value={bullet}
+                            onChange={(e) => {
+                              const newBullets = [...exp.bullets];
+                              newBullets[bulletIndex] = e.target.value;
+                              updateArrayField(
+                                "experience",
+                                index,
+                                "bullets",
+                                newBullets
+                              );
+                            }}
+                          />
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              const newBullets = exp.bullets.filter(
+                                (_, i) => i !== bulletIndex
+                              );
+                              updateArrayField(
+                                "experience",
+                                index,
+                                "bullets",
+                                newBullets
+                              );
+                            }}
+                            className="text-red-500 hover:text-red-700"
+                          >
+                            Remove
+                          </Button>
+                        </div>
+                      ))}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          const newBullets = [...exp.bullets, ""];
+                          updateArrayField(
+                            "experience",
+                            index,
+                            "bullets",
+                            newBullets
+                          );
+                        }}
+                      >
+                        Add Bullet Point
+                      </Button>
+                    </div>
+                  </div>
+                  <div className="mt-4 flex justify-end">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => removeArrayItem("experience", index)}
+                      className="text-red-500 hover:text-red-700"
+                    >
+                      Remove Experience
+                    </Button>
+                  </div>
+                </div>
+              ))}
+              <Button
+                variant="outline"
+                onClick={() =>
+                  addArrayItem("experience", {
+                    company: "",
+                    role: "",
+                    start: "",
+                    end: "",
+                    bullets: [""],
+                  })
+                }
+              >
+                Add Experience
+              </Button>
+            </div>
+          </Card>
+
+          {/* Projects Section */}
+          <Card className="p-6 bg-white/80 backdrop-blur-sm border-white/20">
+            <h3 className="text-lg font-semibold text-gray-800 mb-4">
+              Projects
+            </h3>
+            <div className="space-y-4">
+              {editableData.projects.map((project, index) => (
+                <div
+                  key={index}
+                  className="border border-gray-200 rounded-lg p-4"
+                >
+                  <div className="grid md:grid-cols-2 gap-4 mb-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Project Name
+                      </label>
+                      <Input
+                        value={project.name}
+                        onChange={(e) =>
+                          updateArrayField(
+                            "projects",
+                            index,
+                            "name",
+                            e.target.value
+                          )
+                        }
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Description
+                      </label>
+                      <Input
+                        value={project.description}
+                        onChange={(e) =>
+                          updateArrayField(
+                            "projects",
+                            index,
+                            "description",
+                            e.target.value
+                          )
+                        }
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Key Achievements
+                    </label>
+                    <div className="space-y-2">
+                      {project.bullets.map((bullet, bulletIndex) => (
+                        <div
+                          key={bulletIndex}
+                          className="flex items-center gap-2"
+                        >
+                          <Input
+                            value={bullet}
+                            onChange={(e) => {
+                              const newBullets = [...project.bullets];
+                              newBullets[bulletIndex] = e.target.value;
+                              updateArrayField(
+                                "projects",
+                                index,
+                                "bullets",
+                                newBullets
+                              );
+                            }}
+                          />
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              const newBullets = project.bullets.filter(
+                                (_, i) => i !== bulletIndex
+                              );
+                              updateArrayField(
+                                "projects",
+                                index,
+                                "bullets",
+                                newBullets
+                              );
+                            }}
+                            className="text-red-500 hover:text-red-700"
+                          >
+                            Remove
+                          </Button>
+                        </div>
+                      ))}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          const newBullets = [...project.bullets, ""];
+                          updateArrayField(
+                            "projects",
+                            index,
+                            "bullets",
+                            newBullets
+                          );
+                        }}
+                      >
+                        Add Bullet Point
+                      </Button>
+                    </div>
+                  </div>
+                  <div className="mt-4 flex justify-end">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => removeArrayItem("projects", index)}
+                      className="text-red-500 hover:text-red-700"
+                    >
+                      Remove Project
+                    </Button>
+                  </div>
+                </div>
+              ))}
+              <Button
+                variant="outline"
+                onClick={() =>
+                  addArrayItem("projects", {
+                    name: "",
+                    description: "",
+                    bullets: [""],
+                  })
+                }
+              >
+                Add Project
+              </Button>
+            </div>
+          </Card>
+
+          {/* Education Section */}
+          <Card className="p-6 bg-white/80 backdrop-blur-sm border-white/20">
+            <h3 className="text-lg font-semibold text-gray-800 mb-4">
+              Education
+            </h3>
+            <div className="space-y-4">
+              {editableData.education.map((edu, index) => (
+                <div
+                  key={index}
+                  className="border border-gray-200 rounded-lg p-4"
+                >
+                  <div className="grid md:grid-cols-3 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        School
+                      </label>
+                      <Input
+                        value={edu.school}
+                        onChange={(e) =>
+                          updateArrayField(
+                            "education",
+                            index,
+                            "school",
+                            e.target.value
+                          )
+                        }
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Degree
+                      </label>
+                      <Input
+                        value={edu.degree}
+                        onChange={(e) =>
+                          updateArrayField(
+                            "education",
+                            index,
+                            "degree",
+                            e.target.value
+                          )
+                        }
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Year
+                      </label>
+                      <Input
+                        value={edu.year || ""}
+                        onChange={(e) =>
+                          updateArrayField(
+                            "education",
+                            index,
+                            "year",
+                            e.target.value
+                          )
+                        }
+                      />
+                    </div>
+                  </div>
+                  <div className="mt-4 flex justify-end">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => removeArrayItem("education", index)}
+                      className="text-red-500 hover:text-red-700"
+                    >
+                      Remove Education
+                    </Button>
+                  </div>
+                </div>
+              ))}
+              <Button
+                variant="outline"
+                onClick={() =>
+                  addArrayItem("education", {
+                    school: "",
+                    degree: "",
+                    year: "",
+                  })
+                }
+              >
+                Add Education
+              </Button>
+            </div>
+          </Card>
+        </TabsContent>
+      </Tabs>
+
+      {/* Export Actions */}
+      <Card className="p-6 bg-white/80 backdrop-blur-sm border-white/20 mt-8">
+        <div className="flex flex-col sm:flex-row gap-4 justify-center">
+          <Button
+            size="lg"
+            onClick={() => onExport("docx")}
+            disabled={isExporting}
+            className="bg-teal-600 hover:bg-teal-700 text-white px-8 py-3"
+          >
+            {isExporting ? (
+              <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+            ) : (
+              <Download className="w-5 h-5 mr-2" />
+            )}
+            Download DOCX
+          </Button>
+          <Button
+            size="lg"
+            variant="outline"
+            onClick={() => onExport("pdf")}
+            disabled={isExporting}
+            className="border-teal-600 text-teal-600 hover:bg-teal-50 px-8 py-3"
+          >
+            {isExporting ? (
+              <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+            ) : (
+              <FileText className="w-5 h-5 mr-2" />
+            )}
+            Download PDF
+          </Button>
+        </div>
+      </Card>
+    </div>
+  );
+}
