@@ -30,11 +30,20 @@ You must return a JSON object with exactly two fields:
 1. "markdown": A string containing the rewritten resume in Markdown format with clear headings and bullet lists
 2. "json": An object with the structured resume data containing header, summary, skills, experience, projects, education, and certifications
 
-The JSON structure must match this schema:
+The JSON structure must match this schema and include explicit contact fields when available:
 {
   "markdown": "string",
   "json": {
-    "header": {"name": "string", "title": "string", "location": "string", "links": ["string"]},
+    "header": {
+      "name": "string",
+      "title": "string",
+      "location": "string",
+      "phone": "string",
+      "email": "string",
+      "linkedin": "string",
+      "portfolio": "string",
+      "links": ["string"]
+    },
     "summary": "string",
     "skills": [{"group": "string", "items": ["string"]}],
     "experience": [{"company": "string", "role": "string", "start": "string", "end": "string", "bullets": ["string"], "tech": ["string"]}],
@@ -42,7 +51,9 @@ The JSON structure must match this schema:
     "education": [{"school": "string", "degree": "string", "year": "string"}],
     "certifications": ["string"]
   }
-}`;
+}
+
+When a contact detail is missing from the source resume, return an empty string for that field rather than omitting the key.`;
 
     const userPrompt = `Resume:
 ${resumeText}
