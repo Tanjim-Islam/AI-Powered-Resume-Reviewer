@@ -55,7 +55,7 @@ async function generateDocx(
       {
         properties: {},
         children: [
-          // Header
+          // Header with proper spacing
           new Paragraph({
             children: [
               new TextRun({
@@ -73,6 +73,7 @@ async function generateDocx(
                   children: [
                     new TextRun({
                       text: resumeData.header.title,
+                      bold: true,
                       size: 24,
                     }),
                   ],
@@ -110,12 +111,22 @@ async function generateDocx(
                 children: [
                   new TextRun({
                     text: contacts.join(" | "),
-                    size: 20,
+                    size: 18,
                   }),
                 ],
               }),
             ];
           })(),
+
+          // Separator line after header
+          new Paragraph({
+            children: [
+              new TextRun({
+                text: "-".repeat(50),
+                size: 16,
+              }),
+            ],
+          }),
 
           // Summary
           new Paragraph({
@@ -123,18 +134,25 @@ async function generateDocx(
               new TextRun({
                 text: "SUMMARY",
                 bold: true,
-                size: 24,
+                size: 28,
               }),
             ],
             heading: HeadingLevel.HEADING_2,
+            spacing: {
+              after: 300,
+              before: 200,
+            },
           }),
           new Paragraph({
             children: [
               new TextRun({
                 text: resumeData.summary,
-                size: 20,
+                size: 22,
               }),
             ],
+            spacing: {
+              after: 400,
+            },
           }),
 
           // Skills
@@ -143,10 +161,14 @@ async function generateDocx(
               new TextRun({
                 text: "SKILLS",
                 bold: true,
-                size: 24,
+                size: 28,
               }),
             ],
             heading: HeadingLevel.HEADING_2,
+            spacing: {
+              after: 300,
+              before: 200,
+            },
           }),
           ...resumeData.skills.flatMap(
             (skillGroup: { group: string; items: string[] }) => [
@@ -172,10 +194,14 @@ async function generateDocx(
               new TextRun({
                 text: "EXPERIENCE",
                 bold: true,
-                size: 24,
+                size: 28,
               }),
             ],
             heading: HeadingLevel.HEADING_2,
+            spacing: {
+              after: 300,
+              before: 200,
+            },
           }),
           ...resumeData.experience.flatMap(
             (exp: {
@@ -225,10 +251,14 @@ async function generateDocx(
                     new TextRun({
                       text: "PROJECTS",
                       bold: true,
-                      size: 24,
+                      size: 28,
                     }),
                   ],
                   heading: HeadingLevel.HEADING_2,
+                  spacing: {
+                    after: 300,
+                    before: 200,
+                  },
                 }),
                 ...resumeData.projects.flatMap(
                   (project: {
@@ -276,10 +306,14 @@ async function generateDocx(
               new TextRun({
                 text: "EDUCATION",
                 bold: true,
-                size: 24,
+                size: 28,
               }),
             ],
             heading: HeadingLevel.HEADING_2,
+            spacing: {
+              after: 300,
+              before: 200,
+            },
           }),
           ...resumeData.education.map(
             (edu: {
@@ -312,10 +346,14 @@ async function generateDocx(
                     new TextRun({
                       text: "CERTIFICATIONS",
                       bold: true,
-                      size: 24,
+                      size: 28,
                     }),
                   ],
                   heading: HeadingLevel.HEADING_2,
+                  spacing: {
+                    after: 300,
+                    before: 200,
+                  },
                 }),
                 ...resumeData.certifications.map(
                   (cert: string) =>
@@ -410,12 +448,13 @@ async function generatePdf(
     return lines;
   };
 
+  // Header with proper spacing
   addText(resumeData.header.name, 50, yPosition, 24, true);
   yPosition -= 30;
 
   if (resumeData.header.title) {
     ensureSpace(1.5);
-    addText(resumeData.header.title, 50, yPosition, 16);
+    addText(resumeData.header.title, 50, yPosition, 16, true);
     yPosition -= 20;
   }
 
@@ -438,24 +477,33 @@ async function generatePdf(
     yPosition -= 20;
   }
 
-  yPosition -= sectionSpacing;
-
+  // Separator line after header
   ensureSpace(2);
-  addText("SUMMARY", 50, yPosition, 16, true);
-  yPosition -= 20;
+  yPosition -= 10;
+  addText(
+    "--------------------------------------------------",
+    50,
+    yPosition,
+    12
+  );
+  yPosition -= 30;
+
+  ensureSpace(3);
+  addText("SUMMARY", 50, yPosition, 20, true);
+  yPosition -= 30;
 
   const summaryLines = wrapText(resumeData.summary, width - 100, 12);
   for (const line of summaryLines) {
-    ensureSpace(1.5);
+    ensureSpace(1);
     addText(line, 50, yPosition, 12);
     yPosition -= lineHeight;
   }
 
-  yPosition -= sectionSpacing;
+  yPosition -= 40;
 
-  ensureSpace(2);
-  addText("SKILLS", 50, yPosition, 16, true);
-  yPosition -= 20;
+  ensureSpace(3);
+  addText("SKILLS", 50, yPosition, 20, true);
+  yPosition -= 30;
 
   for (const skillGroup of resumeData.skills) {
     const skillText = `${skillGroup.group}: ${skillGroup.items.join(", ")}`;
@@ -469,9 +517,9 @@ async function generatePdf(
 
   yPosition -= sectionSpacing;
 
-  ensureSpace(2);
-  addText("EXPERIENCE", 50, yPosition, 16, true);
-  yPosition -= 20;
+  ensureSpace(3);
+  addText("EXPERIENCE", 50, yPosition, 20, true);
+  yPosition -= 30;
 
   for (const exp of resumeData.experience) {
     ensureSpace(3);
@@ -494,9 +542,9 @@ async function generatePdf(
   yPosition -= sectionSpacing;
 
   if (resumeData.projects.length > 0) {
-    ensureSpace(2);
-    addText("PROJECTS", 50, yPosition, 16, true);
-    yPosition -= 20;
+    ensureSpace(3);
+    addText("PROJECTS", 50, yPosition, 20, true);
+    yPosition -= 30;
 
     for (const project of resumeData.projects) {
       ensureSpace(3);
@@ -524,9 +572,9 @@ async function generatePdf(
     yPosition -= sectionSpacing;
   }
 
-  ensureSpace(2);
-  addText("EDUCATION", 50, yPosition, 16, true);
-  yPosition -= 20;
+  ensureSpace(3);
+  addText("EDUCATION", 50, yPosition, 20, true);
+  yPosition -= 30;
 
   for (const edu of resumeData.education) {
     ensureSpace(1.5);
@@ -541,9 +589,9 @@ async function generatePdf(
   yPosition -= sectionSpacing;
 
   if (resumeData.certifications && resumeData.certifications.length > 0) {
-    ensureSpace(2);
-    addText("CERTIFICATIONS", 50, yPosition, 16, true);
-    yPosition -= 20;
+    ensureSpace(3);
+    addText("CERTIFICATIONS", 50, yPosition, 20, true);
+    yPosition -= 30;
 
     for (const cert of resumeData.certifications) {
       ensureSpace(1.5);

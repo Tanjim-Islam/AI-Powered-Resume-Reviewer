@@ -164,3 +164,64 @@
     @apply bg-background text-foreground;
   }
 }
+
+@layer components {
+  .markdown-content {
+    @apply w-full;
+    line-height: 1.8;
+  }
+
+  .markdown-content h1 {
+    @apply text-center;
+  }
+
+  .markdown-content h2 {
+    @apply text-center;
+    margin-top: 2rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .markdown-content h3 {
+    margin-top: 1.5rem;
+    margin-bottom: 0.75rem;
+  }
+
+  .markdown-content p {
+    margin-bottom: 1.25rem;
+  }
+
+  .markdown-content ul {
+    margin-bottom: 1.25rem;
+  }
+
+  .markdown-content li {
+    margin-bottom: 0.5rem;
+  }
+
+  .markdown-content div[style*="text-align: center"] {
+    @apply text-center;
+  }
+
+  .markdown-content div[style*="text-align: center"] * {
+    @apply text-center;
+  }
+
+  /* Enhanced spacing for markdown content */
+  .markdown-content {
+    max-width: none;
+  }
+
+  .markdown-content p {
+    margin-bottom: 1.5rem;
+  }
+
+  .markdown-content h2 {
+    margin-top: 3rem;
+    margin-bottom: 2rem;
+  }
+
+  .markdown-content h3 {
+    margin-top: 2rem;
+    margin-bottom: 1rem;
+  }
+}
