@@ -282,16 +282,26 @@ async function generateDocx(
             heading: HeadingLevel.HEADING_2,
           }),
           ...resumeData.education.map(
-            (edu: { school: string; degree: string; year?: string }) =>
-              new Paragraph({
+            (edu: {
+              school: string;
+              degree: string;
+              year?: string;
+              cgpa?: string;
+            }) => {
+              let eduText = `${edu.degree} - ${edu.school}`;
+              if (edu.cgpa) {
+                eduText += ` (CGPA: ${edu.cgpa})`;
+              }
+              return new Paragraph({
                 children: [
                   new TextRun({
-                    text: `${edu.degree} - ${edu.school}`,
+                    text: eduText,
                     bold: true,
                     size: 20,
                   }),
                 ],
-              })
+              });
+            }
           ),
 
           // Certifications
@@ -520,7 +530,11 @@ async function generatePdf(
 
   for (const edu of resumeData.education) {
     ensureSpace(1.5);
-    addText(`${edu.degree} - ${edu.school}`, 50, yPosition, 12, true);
+    let eduText = `${edu.degree} - ${edu.school}`;
+    if (edu.cgpa) {
+      eduText += ` (CGPA: ${edu.cgpa})`;
+    }
+    addText(eduText, 50, yPosition, 12, true);
     yPosition -= lineHeight;
   }
 

@@ -73,6 +73,7 @@ export const RewriteResponseSchema = z.object({
         school: z.string(),
         degree: z.string(),
         year: z.string().optional(),
+        cgpa: z.string().optional(),
       })
     ),
     certifications: z.array(z.string()).optional(),

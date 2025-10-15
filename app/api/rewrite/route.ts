@@ -48,7 +48,7 @@ The JSON structure must match this schema and include explicit contact fields wh
     "skills": [{"group": "string", "items": ["string"]}],
     "experience": [{"company": "string", "role": "string", "start": "string", "end": "string", "bullets": ["string"], "tech": ["string"]}],
     "projects": [{"name": "string", "description": "string", "bullets": ["string"], "tech": ["string"]}],
-    "education": [{"school": "string", "degree": "string", "year": "string"}],
+    "education": [{"school": "string", "degree": "string", "year": "string", "cgpa": "string"}],
     "certifications": ["string"]
   }
 }

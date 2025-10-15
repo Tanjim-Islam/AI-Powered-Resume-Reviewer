@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -57,6 +57,98 @@ export function RewritePreview({
       setIsSaving(false);
     }
   };
+
+  // Generate markdown from JSON data
+  const generateMarkdown = (data: EditableData): string => {
+    let markdown = "";
+
+    // Header
+    markdown += `# ${data.header.name}\n\n`;
+
+    if (data.header.title) {
+      markdown += `**${data.header.title}**\n\n`;
+    }
+
+    if (data.header.location) {
+      markdown += `${data.header.location}\n\n`;
+    }
+
+    // Contact info
+    const contacts = [
+      data.header.phone,
+      data.header.email,
+      data.header.linkedin,
+      data.header.portfolio,
+    ].filter(Boolean);
+
+    if (contacts.length > 0) {
+      markdown += `${contacts.join(" | ")}\n\n`;
+    }
+
+    // Summary
+    markdown += `## Summary\n\n${data.summary}\n\n`;
+
+    // Skills
+    markdown += `## Skills\n\n`;
+    data.skills.forEach((skillGroup) => {
+      markdown += `**${skillGroup.group}:** ${skillGroup.items.join(", ")}\n\n`;
+    });
+
+    // Experience
+    markdown += `## Experience\n\n`;
+    data.experience.forEach((exp) => {
+      markdown += `### ${exp.role} at ${exp.company}\n\n`;
+      markdown += `*${exp.start} - ${exp.end}*\n\n`;
+      exp.bullets.forEach((bullet) => {
+        markdown += `- ${bullet}\n`;
+      });
+      markdown += "\n";
+    });
+
+    // Projects
+    if (data.projects.length > 0) {
+      markdown += `## Projects\n\n`;
+      data.projects.forEach((project) => {
+        markdown += `### ${project.name}\n\n`;
+        markdown += `${project.description}\n\n`;
+        project.bullets.forEach((bullet) => {
+          markdown += `- ${bullet}\n`;
+        });
+        markdown += "\n";
+      });
+    }
+
+    // Education
+    markdown += `## Education\n\n`;
+    data.education.forEach((edu) => {
+      markdown += `- **${edu.degree}** - ${edu.school}`;
+      if (edu.year) {
+        markdown += ` (${edu.year})`;
+      }
+      if (edu.cgpa) {
+        markdown += ` - CGPA: ${edu.cgpa}`;
+      }
+      markdown += "\n";
+    });
+    markdown += "\n";
+
+    // Certifications
+    if (data.certifications && data.certifications.length > 0) {
+      markdown += `## Certifications\n\n`;
+      data.certifications.forEach((cert) => {
+        markdown += `- ${cert}\n`;
+      });
+      markdown += "\n";
+    }
+
+    return markdown.trim();
+  };
+
+  // Generate markdown whenever editableData changes
+  const currentMarkdown = useMemo(
+    () => generateMarkdown(editableData),
+    [editableData]
+  );
 
   const copyToClipboard = async (text: string) => {
     try {
@@ -265,7 +357,7 @@ export function RewritePreview({
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => copyToClipboard(rewriteData.markdown)}
+                onClick={() => copyToClipboard(currentMarkdown)}
               >
                 <Copy className="w-4 h-4 mr-2" />
                 Copy Markdown
@@ -273,7 +365,7 @@ export function RewritePreview({
             </div>
             <div className="prose max-w-none">
               <div className="bg-gray-50 p-4 rounded-lg overflow-x-auto text-sm text-gray-700">
-                <ReactMarkdown>{rewriteData.markdown}</ReactMarkdown>
+                <ReactMarkdown>{currentMarkdown}</ReactMarkdown>
               </div>
             </div>
           </Card>
@@ -804,7 +896,7 @@ export function RewritePreview({
                   key={index}
                   className="border border-gray-200 rounded-lg p-4"
                 >
-                  <div className="grid md:grid-cols-3 gap-4">
+                  <div className="grid md:grid-cols-4 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
                         School
@@ -853,6 +945,22 @@ export function RewritePreview({
                         }
                       />
                     </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        CGPA
+                      </label>
+                      <Input
+                        value={edu.cgpa || ""}
+                        onChange={(e) =>
+                          updateArrayField(
+                            "education",
+                            index,
+                            "cgpa",
+                            e.target.value
+                          )
+                        }
+                      />
+                    </div>
                   </div>
                   <div className="mt-4 flex justify-end">
                     <Button
@@ -873,6 +981,7 @@ export function RewritePreview({
                     school: "",
                     degree: "",
                     year: "",
+                    cgpa: "",
                   })
                 }
               >
