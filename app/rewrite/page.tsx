@@ -13,7 +13,9 @@ export default function RewritePage() {
   const [resumeText, setResumeText] = useState("");
   const [jobDescription, setJobDescription] = useState("");
   const [isRewriting, setIsRewriting] = useState(false);
-  const [isExporting, setIsExporting] = useState(false);
+  const [exportingFormat, setExportingFormat] = useState<"docx" | "pdf" | null>(
+    null
+  );
   const [rewriteData, setRewriteData] = useState<RewriteResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -67,10 +69,24 @@ export default function RewritePage() {
     }
   };
 
+  const handleSave = async (updatedJson: RewriteResponse["json"]) => {
+    if (!rewriteData) return;
+    const nextData: RewriteResponse = {
+      ...rewriteData,
+      json: updatedJson,
+    };
+    setRewriteData(nextData);
+    try {
+      sessionStorage.setItem("rewriteResult", JSON.stringify(nextData));
+    } catch {
+      // ignore storage errors
+    }
+  };
+
   const handleExport = async (format: "docx" | "pdf") => {
     if (!rewriteData) return;
 
-    setIsExporting(true);
+    setExportingFormat(format);
     try {
       const response = await fetch("/api/export", {
         method: "POST",
@@ -102,7 +118,7 @@ export default function RewritePage() {
       console.error("Export error:", error);
       alert(error instanceof Error ? error.message : "Export failed");
     } finally {
-      setIsExporting(false);
+      setExportingFormat(null);
     }
   };
 
@@ -190,7 +206,10 @@ export default function RewritePage() {
           <RewritePreview
             rewriteData={rewriteData}
             onExport={handleExport}
-            isExporting={isExporting}
+            onSave={async (data) => {
+              await handleSave(data);
+            }}
+            exportingFormat={exportingFormat}
           />
         )}
       </div>

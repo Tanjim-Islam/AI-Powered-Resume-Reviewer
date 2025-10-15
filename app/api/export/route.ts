@@ -93,6 +93,30 @@ async function generateDocx(
               ]
             : []),
 
+          ...(() => {
+            const contacts = [
+              resumeData.header.phone,
+              resumeData.header.email,
+              resumeData.header.linkedin,
+              resumeData.header.portfolio,
+            ].filter(Boolean);
+
+            if (contacts.length === 0) {
+              return [];
+            }
+
+            return [
+              new Paragraph({
+                children: [
+                  new TextRun({
+                    text: contacts.join(" | "),
+                    size: 20,
+                  }),
+                ],
+              }),
+            ];
+          })(),
+
           // Summary
           new Paragraph({
             children: [
@@ -308,8 +332,9 @@ async function generatePdf(
   resumeData: RewriteResponse["json"]
 ): Promise<Buffer> {
   const pdfDoc = await PDFDocument.create();
-  const page = pdfDoc.addPage([612, 792]); // Letter size
-  const { width, height } = page.getSize();
+  const pageSize: [number, number] = [612, 792]; // Letter size
+  let page = pdfDoc.addPage(pageSize);
+  let { width, height } = page.getSize();
 
   const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
   const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
@@ -317,8 +342,20 @@ async function generatePdf(
   let yPosition = height - 50;
   const lineHeight = 20;
   const sectionSpacing = 30;
+  const bottomMargin = 50;
 
-  // Helper function to add text
+  const addPage = () => {
+    page = pdfDoc.addPage(pageSize);
+    ({ width, height } = page.getSize());
+    yPosition = height - 50;
+  };
+
+  const ensureSpace = (linesNeeded: number) => {
+    if (yPosition - linesNeeded * lineHeight < bottomMargin) {
+      addPage();
+    }
+  };
+
   const addText = (
     text: string,
     x: number,
@@ -335,7 +372,6 @@ async function generatePdf(
     });
   };
 
-  // Helper function to wrap text
   const wrapText = (
     text: string,
     maxWidth: number,
@@ -364,41 +400,57 @@ async function generatePdf(
     return lines;
   };
 
-  // Header
   addText(resumeData.header.name, 50, yPosition, 24, true);
   yPosition -= 30;
 
   if (resumeData.header.title) {
+    ensureSpace(1.5);
     addText(resumeData.header.title, 50, yPosition, 16);
     yPosition -= 20;
   }
 
   if (resumeData.header.location) {
+    ensureSpace(1.5);
     addText(resumeData.header.location, 50, yPosition, 14);
+    yPosition -= 20;
+  }
+
+  const contacts = [
+    resumeData.header.phone,
+    resumeData.header.email,
+    resumeData.header.linkedin,
+    resumeData.header.portfolio,
+  ].filter(Boolean);
+
+  if (contacts.length > 0) {
+    ensureSpace(1.5);
+    addText(contacts.join(" | "), 50, yPosition, 12);
     yPosition -= 20;
   }
 
   yPosition -= sectionSpacing;
 
-  // Summary
+  ensureSpace(2);
   addText("SUMMARY", 50, yPosition, 16, true);
   yPosition -= 20;
 
   const summaryLines = wrapText(resumeData.summary, width - 100, 12);
   for (const line of summaryLines) {
+    ensureSpace(1.5);
     addText(line, 50, yPosition, 12);
     yPosition -= lineHeight;
   }
 
   yPosition -= sectionSpacing;
 
-  // Skills
+  ensureSpace(2);
   addText("SKILLS", 50, yPosition, 16, true);
   yPosition -= 20;
 
   for (const skillGroup of resumeData.skills) {
     const skillText = `${skillGroup.group}: ${skillGroup.items.join(", ")}`;
     const skillLines = wrapText(skillText, width - 100, 12);
+    ensureSpace(skillLines.length + 1);
     for (const line of skillLines) {
       addText(line, 50, yPosition, 12);
       yPosition -= lineHeight;
@@ -407,11 +459,12 @@ async function generatePdf(
 
   yPosition -= sectionSpacing;
 
-  // Experience
+  ensureSpace(2);
   addText("EXPERIENCE", 50, yPosition, 16, true);
   yPosition -= 20;
 
   for (const exp of resumeData.experience) {
+    ensureSpace(3);
     addText(`${exp.role} at ${exp.company}`, 50, yPosition, 14, true);
     yPosition -= 15;
     addText(`${exp.start} - ${exp.end}`, 50, yPosition, 12);
@@ -419,6 +472,7 @@ async function generatePdf(
 
     for (const bullet of exp.bullets) {
       const bulletLines = wrapText(`• ${bullet}`, width - 100, 12);
+      ensureSpace(bulletLines.length + 1);
       for (const line of bulletLines) {
         addText(line, 50, yPosition, 12);
         yPosition -= lineHeight;
@@ -429,16 +483,18 @@ async function generatePdf(
 
   yPosition -= sectionSpacing;
 
-  // Projects
   if (resumeData.projects.length > 0) {
+    ensureSpace(2);
     addText("PROJECTS", 50, yPosition, 16, true);
     yPosition -= 20;
 
     for (const project of resumeData.projects) {
+      ensureSpace(3);
       addText(project.name, 50, yPosition, 14, true);
       yPosition -= 15;
 
       const descLines = wrapText(project.description, width - 100, 12);
+      ensureSpace(descLines.length + 1);
       for (const line of descLines) {
         addText(line, 50, yPosition, 12);
         yPosition -= lineHeight;
@@ -446,6 +502,7 @@ async function generatePdf(
 
       for (const bullet of project.bullets) {
         const bulletLines = wrapText(`• ${bullet}`, width - 100, 12);
+        ensureSpace(bulletLines.length + 1);
         for (const line of bulletLines) {
           addText(line, 50, yPosition, 12);
           yPosition -= lineHeight;
@@ -457,23 +514,25 @@ async function generatePdf(
     yPosition -= sectionSpacing;
   }
 
-  // Education
+  ensureSpace(2);
   addText("EDUCATION", 50, yPosition, 16, true);
   yPosition -= 20;
 
   for (const edu of resumeData.education) {
+    ensureSpace(1.5);
     addText(`${edu.degree} - ${edu.school}`, 50, yPosition, 12, true);
     yPosition -= lineHeight;
   }
 
   yPosition -= sectionSpacing;
 
-  // Certifications
   if (resumeData.certifications && resumeData.certifications.length > 0) {
+    ensureSpace(2);
     addText("CERTIFICATIONS", 50, yPosition, 16, true);
     yPosition -= 20;
 
     for (const cert of resumeData.certifications) {
+      ensureSpace(1.5);
       addText(`• ${cert}`, 50, yPosition, 12);
       yPosition -= lineHeight;
     }

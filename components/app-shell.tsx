@@ -47,7 +47,7 @@ export function AppShell({ children, className = "" }: AppShellProps) {
         <div className="container mx-auto px-4 py-6">
           <div className="text-center text-sm text-gray-600">
             <p>
-              © 2024 Resume Reviewer. Built with brutal truth. Resumes quake.
+              © 2024 Resume Reviewer. Built with brutal truth.
             </p>
           </div>
         </div>

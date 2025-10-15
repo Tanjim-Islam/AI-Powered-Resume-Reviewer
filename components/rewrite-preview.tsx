@@ -1,19 +1,28 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
-import { Download, Copy, Eye, Edit3, FileText, Loader2 } from "lucide-react";
+import {
+  Download,
+  Copy,
+  Eye,
+  Edit3,
+  FileText,
+  Loader2,
+  Save,
+} from "lucide-react";
 import { RewriteResponse } from "@/lib/schemas";
 
 interface RewritePreviewProps {
   rewriteData: RewriteResponse;
   onExport: (format: "docx" | "pdf") => Promise<void>;
-  isExporting: boolean;
+  onSave: (data: RewriteResponse["json"]) => Promise<void>;
+  exportingFormat: "docx" | "pdf" | null;
 }
 
 type EditableData = RewriteResponse["json"];
@@ -21,12 +30,33 @@ type EditableData = RewriteResponse["json"];
 export function RewritePreview({
   rewriteData,
   onExport,
-  isExporting,
+  onSave,
+  exportingFormat,
 }: RewritePreviewProps) {
   const [activeTab, setActiveTab] = useState("markdown");
   const [editableData, setEditableData] = useState<EditableData>(
     rewriteData.json
   );
+  const [isDirty, setIsDirty] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    setEditableData(rewriteData.json);
+    setIsDirty(false);
+  }, [rewriteData.json]);
+
+  const markDirty = () => setIsDirty(true);
+
+  const handleSave = async () => {
+    if (!isDirty || isSaving) return;
+    setIsSaving(true);
+    try {
+      await onSave(editableData);
+      setIsDirty(false);
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   const copyToClipboard = async (text: string) => {
     try {
@@ -48,6 +78,7 @@ export function RewritePreview({
         [field]: value,
       },
     }));
+    markDirty();
   };
 
   const updateArrayField = (
@@ -56,6 +87,7 @@ export function RewritePreview({
     field: string,
     value: string
   ) => {
+    let didUpdate = false;
     setEditableData((prev) => {
       const currentSection = prev[section];
       if (Array.isArray(currentSection) && currentSection.length > 0) {
@@ -65,6 +97,7 @@ export function RewritePreview({
           currentSection[0] !== null
         ) {
           const arr = currentSection as Array<Record<string, unknown>>;
+          didUpdate = true;
           return {
             ...prev,
             [section]: arr.map((item, i) =>
@@ -75,6 +108,7 @@ export function RewritePreview({
       }
       return prev;
     });
+    if (didUpdate) markDirty();
   };
 
   const updateNestedArrayField = (
@@ -84,6 +118,7 @@ export function RewritePreview({
     itemIndex: number,
     value: string
   ) => {
+    let didUpdate = false;
     setEditableData((prev) => {
       const currentSection = prev[section];
       if (Array.isArray(currentSection) && currentSection.length > 0) {
@@ -92,6 +127,7 @@ export function RewritePreview({
           currentSection[0] !== null
         ) {
           const arr = currentSection as Array<Record<string, unknown>>;
+          didUpdate = true;
           return {
             ...prev,
             [section]: arr.map((item, i) =>
@@ -109,6 +145,7 @@ export function RewritePreview({
       }
       return prev;
     });
+    if (didUpdate) markDirty();
   };
 
   const updateSkillsArrayItem = (
@@ -117,6 +154,7 @@ export function RewritePreview({
     itemIndex: number,
     value: string
   ) => {
+    let didUpdate = false;
     setEditableData((prev) => {
       const currentSection = prev[section];
       if (Array.isArray(currentSection) && currentSection.length > 0) {
@@ -125,6 +163,7 @@ export function RewritePreview({
           currentSection[0] !== null
         ) {
           const arr = currentSection as Array<Record<string, unknown>>;
+          didUpdate = true;
           return {
             ...prev,
             [section]: arr.map((item, i) =>
@@ -142,12 +181,14 @@ export function RewritePreview({
       }
       return prev;
     });
+    if (didUpdate) markDirty();
   };
 
   const addArrayItem = (
     section: keyof EditableData,
     newItem: Record<string, unknown>
   ) => {
+    let didUpdate = false;
     setEditableData((prev) => {
       const currentSection = prev[section];
       if (Array.isArray(currentSection) && currentSection.length > 0) {
@@ -156,6 +197,7 @@ export function RewritePreview({
           currentSection[0] !== null
         ) {
           const arr = currentSection as Array<Record<string, unknown>>;
+          didUpdate = true;
           return {
             ...prev,
             [section]: [...arr, newItem] as unknown as typeof currentSection,
@@ -164,9 +206,11 @@ export function RewritePreview({
       }
       return prev;
     });
+    if (didUpdate) markDirty();
   };
 
   const removeArrayItem = (section: keyof EditableData, index: number) => {
+    let didUpdate = false;
     setEditableData((prev) => {
       const currentSection = prev[section];
       if (Array.isArray(currentSection) && currentSection.length > 0) {
@@ -175,6 +219,7 @@ export function RewritePreview({
           currentSection[0] !== null
         ) {
           const arr = currentSection as Array<Record<string, unknown>>;
+          didUpdate = true;
           return {
             ...prev,
             [section]: arr.filter(
@@ -185,6 +230,7 @@ export function RewritePreview({
       }
       return prev;
     });
+    if (didUpdate) markDirty();
   };
 
   return (
@@ -234,6 +280,21 @@ export function RewritePreview({
         </TabsContent>
 
         <TabsContent value="edit" className="space-y-6">
+          <div className="flex justify-end">
+            <Button
+              onClick={handleSave}
+              disabled={!isDirty || isSaving}
+              className="bg-teal-600 hover:bg-teal-700 text-white"
+            >
+              {isSaving ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <Save className="w-4 h-4 mr-2" />
+              )}
+              {isSaving ? "Saving..." : "Save Changes"}
+            </Button>
+          </div>
+
           {/* Header Section */}
           <Card className="p-6 bg-white/80 backdrop-blur-sm border-white/20">
             <h3 className="text-lg font-semibold text-gray-800 mb-4">
@@ -273,6 +334,50 @@ export function RewritePreview({
                   }
                 />
               </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Phone
+                </label>
+                <Input
+                  value={editableData.header.phone || ""}
+                  onChange={(e) =>
+                    updateField("header", "phone", e.target.value)
+                  }
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Email
+                </label>
+                <Input
+                  value={editableData.header.email || ""}
+                  onChange={(e) =>
+                    updateField("header", "email", e.target.value)
+                  }
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  LinkedIn
+                </label>
+                <Input
+                  value={editableData.header.linkedin || ""}
+                  onChange={(e) =>
+                    updateField("header", "linkedin", e.target.value)
+                  }
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Portfolio
+                </label>
+                <Input
+                  value={editableData.header.portfolio || ""}
+                  onChange={(e) =>
+                    updateField("header", "portfolio", e.target.value)
+                  }
+                />
+              </div>
             </div>
           </Card>
 
@@ -283,12 +388,13 @@ export function RewritePreview({
             </h3>
             <Textarea
               value={editableData.summary}
-              onChange={(e) =>
+              onChange={(e) => {
                 setEditableData((prev) => ({
                   ...prev,
                   summary: e.target.value,
-                }))
-              }
+                }));
+                markDirty();
+              }}
               className="min-h-32"
             />
           </Card>
@@ -475,6 +581,7 @@ export function RewritePreview({
                                 }
                                 return prev;
                               });
+                              markDirty();
                             }}
                             className="text-red-500 hover:text-red-700"
                           >
@@ -501,6 +608,7 @@ export function RewritePreview({
                             }
                             return prev;
                           });
+                          markDirty();
                         }}
                       >
                         Add Bullet Point
@@ -624,6 +732,7 @@ export function RewritePreview({
                                 }
                                 return prev;
                               });
+                              markDirty();
                             }}
                             className="text-red-500 hover:text-red-700"
                           >
@@ -650,6 +759,7 @@ export function RewritePreview({
                             }
                             return prev;
                           });
+                          markDirty();
                         }}
                       >
                         Add Bullet Point
@@ -779,10 +889,10 @@ export function RewritePreview({
           <Button
             size="lg"
             onClick={() => onExport("docx")}
-            disabled={isExporting}
+            disabled={exportingFormat !== null}
             className="bg-teal-600 hover:bg-teal-700 text-white px-8 py-3"
           >
-            {isExporting ? (
+            {exportingFormat === "docx" ? (
               <Loader2 className="w-5 h-5 mr-2 animate-spin" />
             ) : (
               <Download className="w-5 h-5 mr-2" />
@@ -793,10 +903,10 @@ export function RewritePreview({
             size="lg"
             variant="outline"
             onClick={() => onExport("pdf")}
-            disabled={isExporting}
+            disabled={exportingFormat !== null}
             className="border-teal-600 text-teal-600 hover:bg-teal-50 px-8 py-3"
           >
-            {isExporting ? (
+            {exportingFormat === "pdf" ? (
               <Loader2 className="w-5 h-5 mr-2 animate-spin" />
             ) : (
               <FileText className="w-5 h-5 mr-2" />
