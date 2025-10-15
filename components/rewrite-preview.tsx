@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import ReactMarkdown from "react-markdown";
+import rehypeRaw from "rehype-raw";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -63,9 +64,7 @@ export function RewritePreview({
     let markdown = "";
 
     // Header - centered with proper spacing
-    markdown += `${data.header.name}\n${"=".repeat(
-      data.header.name.length
-    )}\n\n`;
+    markdown += `<div style="text-align: center;">\n\n# ${data.header.name}\n\n`;
 
     if (data.header.title) {
       markdown += `**${data.header.title}**\n\n`;
@@ -87,17 +86,17 @@ export function RewritePreview({
       markdown += `${contacts.join(" | ")}\n\n`;
     }
 
-    markdown += "---\n\n";
+    markdown += "</div>\n\n---\n\n";
 
     // Summary
-    markdown += `## Summary\n\n${data.summary}\n\n\n`;
+    markdown += `## Summary\n\n${data.summary}\n\n---\n\n`;
 
     // Skills
     markdown += `## Skills\n\n`;
     data.skills.forEach((skillGroup) => {
       markdown += `**${skillGroup.group}:** ${skillGroup.items.join(", ")}\n\n`;
     });
-    markdown += "\n";
+    markdown += "---\n\n";
 
     // Experience
     markdown += `## Experience\n\n`;
@@ -109,6 +108,7 @@ export function RewritePreview({
       });
       markdown += "\n\n";
     });
+    markdown += "---\n\n";
 
     // Projects
     if (data.projects.length > 0) {
@@ -121,6 +121,7 @@ export function RewritePreview({
         });
         markdown += "\n\n";
       });
+      markdown += "---\n\n";
     }
 
     // Education
@@ -135,7 +136,7 @@ export function RewritePreview({
       }
       markdown += "\n";
     });
-    markdown += "\n\n";
+    markdown += "\n\n---\n\n";
 
     // Certifications
     if (data.certifications && data.certifications.length > 0) {
@@ -368,9 +369,13 @@ export function RewritePreview({
                 Copy Markdown
               </Button>
             </div>
-            <div className="prose max-w-none">
-              <div className="bg-gray-50 p-4 rounded-lg overflow-x-auto text-sm text-gray-700">
-                <ReactMarkdown>{currentMarkdown}</ReactMarkdown>
+            <div className="max-w-none">
+              <div className="bg-gray-50 p-6 rounded-lg overflow-x-auto text-sm text-gray-700 leading-relaxed">
+                <div className="markdown-content">
+                  <ReactMarkdown rehypePlugins={[rehypeRaw]}>
+                    {currentMarkdown}
+                  </ReactMarkdown>
+                </div>
               </div>
             </div>
           </Card>
