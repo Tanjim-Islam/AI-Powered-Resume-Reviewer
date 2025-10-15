@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
@@ -13,7 +13,6 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   BarChart3,
   CheckCircle,
@@ -24,51 +23,211 @@ import {
   TrendingUp,
   FileText,
   Lightbulb,
+  Loader2,
 } from "lucide-react";
-import { AnalyzeResponse, BulletSuggestion } from "@/lib/schemas";
+import { AnalyzeResponse } from "@/lib/schemas";
+import { toast } from "sonner";
+
+type AnalyzeWithSource = AnalyzeResponse & {
+  original_resume_text?: string;
+  job_description?: string;
+};
 
 export default function AnalyzePage() {
-  const [analysis, setAnalysis] = useState<AnalyzeResponse | null>(null);
+  const [analysis, setAnalysis] = useState<AnalyzeWithSource | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [copiedItems, setCopiedItems] = useState<Set<string>>(new Set());
+  const [isRewriting, setIsRewriting] = useState(false);
+  const [showDownloadMenu, setShowDownloadMenu] = useState(false);
+  const downloadMenuRef = useRef<HTMLDivElement | null>(null);
   const searchParams = useSearchParams();
   const action = searchParams.get("action");
 
   useEffect(() => {
-    // Get analysis from sessionStorage
-    const storedAnalysis = sessionStorage.getItem("resumeAnalysis");
-    if (storedAnalysis) {
-      setAnalysis(JSON.parse(storedAnalysis));
+    // Check if this is a sample analysis request
+    if (action === "sample") {
+      // Load sample data
+      setAnalysis(getSampleAnalysis());
+      setIsLoading(false);
+    } else {
+      // Get analysis from sessionStorage for real analysis
+      const storedAnalysis = sessionStorage.getItem("resumeAnalysis");
+      if (storedAnalysis) {
+        setAnalysis(JSON.parse(storedAnalysis));
+      }
+      setIsLoading(false);
     }
-    setIsLoading(false);
-  }, []);
+  }, [action]);
 
-  const copyToClipboard = async (text: string, itemId: string) => {
+  useEffect(() => {
+    function onDocClick(e: MouseEvent) {
+      if (!downloadMenuRef.current) return;
+      if (!downloadMenuRef.current.contains(e.target as Node)) {
+        setShowDownloadMenu(false);
+      }
+    }
+    if (showDownloadMenu) {
+      document.addEventListener("click", onDocClick);
+    }
+    return () => document.removeEventListener("click", onDocClick);
+  }, [showDownloadMenu]);
+
+  // Sample analysis data
+  const getSampleAnalysis = (): AnalyzeResponse => {
+    return {
+      ats_score: 78,
+      keyword_match: {
+        matched: [
+          "project management",
+          "leadership",
+          "team collaboration",
+          "strategic planning",
+          "budget management",
+        ],
+        missing: [
+          "agile methodology",
+          "stakeholder management",
+          "risk assessment",
+          "change management",
+        ],
+      },
+      bullet_suggestions: [
+        {
+          original: "Managed team of 5 developers",
+          improved:
+            "Led a high-performing team of 5 developers, implementing agile methodologies that increased productivity by 25%",
+          rationale: "Added quantifiable impact and specific methodology",
+        },
+        {
+          original: "Worked on various projects",
+          improved:
+            "Directed 15+ cross-functional projects from conception to completion, consistently delivering on time and under budget",
+          rationale: "Added specificity and demonstrated leadership",
+        },
+        {
+          original: "Handled client communications",
+          improved:
+            "Served as primary client liaison, managing expectations and resolving issues to maintain 98% client satisfaction rate",
+          rationale: "Added measurable outcomes and specific responsibilities",
+        },
+      ],
+      missing_sections: ["Professional Summary", "Certifications"],
+      formatting_tips: [
+        "Use consistent bullet point formatting",
+        "Add quantifiable achievements where possible",
+        "Include industry-specific keywords",
+        "Keep resume to 1-2 pages",
+      ],
+      inferred_structure: {
+        sectionsPresent: [
+          "Contact Information",
+          "Professional Experience",
+          "Education",
+          "Skills",
+        ],
+        sectionsMissing: ["Professional Summary", "Certifications", "Projects"],
+      },
+    };
+  };
+
+  const copyToClipboard = async (text: string) => {
     try {
       await navigator.clipboard.writeText(text);
-      setCopiedItems((prev) => new Set(prev).add(itemId));
-      setTimeout(() => {
-        setCopiedItems((prev) => {
-          const newSet = new Set(prev);
-          newSet.delete(itemId);
-          return newSet;
-        });
-      }, 2000);
+      toast.success("Copied!", { position: "top-center" });
     } catch (error) {
       console.error("Failed to copy:", error);
     }
+  };
+
+  const handleRewriteFull = async () => {
+    if (action === "sample" || !analysis?.original_resume_text) {
+      toast.error(
+        "Cannot rewrite from sample data. Upload your resume first.",
+        {
+          position: "top-center",
+        }
+      );
+      return;
+    }
+
+    setIsRewriting(true);
+    try {
+      const response = await fetch("/api/rewrite", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          resumeText: analysis.original_resume_text,
+          jobDescription: analysis.job_description || undefined,
+          analysis,
+        }),
+      });
+
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err.error || "Rewrite failed");
+      }
+
+      const data = await response.json();
+      sessionStorage.setItem("rewriteResult", JSON.stringify(data));
+      window.location.href = "/rewrite";
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Rewrite failed", {
+        position: "top-center",
+      });
+    } finally {
+      setIsRewriting(false);
+    }
+  };
+
+  const downloadJson = () => {
+    if (!analysis) return;
+    const blob = new Blob([JSON.stringify(analysis, null, 2)], {
+      type: "application/json",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `analysis-${Date.now()}.json`;
+    document.body.appendChild(a);
+    a.click();
+    URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+    setShowDownloadMenu(false);
+  };
+
+  const generateAnalysisMarkdown = (a: AnalyzeResponse): string => {
+    const matched = a.keyword_match.matched.join(", ");
+    const missing = a.keyword_match.missing.join(", ");
+    const bullets = a.bullet_suggestions
+      .map(
+        (b, i) =>
+          `- ${i + 1}.\n  Original: ${b.original}\n  Improved: ${b.improved}` +
+          (b.rationale ? `\n  Rationale: ${b.rationale}` : "")
+      )
+      .join("\n\n");
+    const missingSections = a.missing_sections.map((s) => `- ${s}`).join("\n");
+    const tips = a.formatting_tips.map((t) => `- ${t}`).join("\n");
+    return `# Resume Analysis\n\n**ATS Score:** ${a.ats_score}\n\n## Keyword Match\n**Matched:** ${matched}\n\n**Missing:** ${missing}\n\n## Bullet Suggestions\n${bullets}\n\n## Missing Sections\n${missingSections}\n\n## Formatting Tips\n${tips}\n`;
+  };
+
+  const downloadMarkdown = () => {
+    if (!analysis) return;
+    const md = generateAnalysisMarkdown(analysis);
+    const blob = new Blob([md], { type: "text/markdown" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `analysis-${Date.now()}.md`;
+    document.body.appendChild(a);
+    a.click();
+    URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+    setShowDownloadMenu(false);
   };
 
   const getScoreColor = (score: number) => {
     if (score >= 80) return "text-green-600";
     if (score >= 60) return "text-yellow-600";
     return "text-red-600";
-  };
-
-  const getScoreBgColor = (score: number) => {
-    if (score >= 80) return "bg-green-100";
-    if (score >= 60) return "bg-yellow-100";
-    return "bg-red-100";
   };
 
   if (isLoading) {
@@ -126,8 +285,20 @@ export default function AnalyzePage() {
             Resume Analysis Results
           </h1>
           <p className="text-gray-600">
-            Here's your detailed ATS analysis and improvement suggestions
+            Here&apos;s your detailed ATS analysis and improvement suggestions
           </p>
+          {action === "sample" && (
+            <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg max-w-2xl mx-auto">
+              <div className="flex items-center justify-center gap-2 text-blue-800">
+                <span className="text-2xl">🎭</span>
+                <span className="font-medium">Sample Analysis</span>
+                <span className="text-sm text-blue-600">
+                  (This is demo data - upload your resume for personalized
+                  results)
+                </span>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Score Cards */}
@@ -211,9 +382,8 @@ export default function AnalyzePage() {
                     <Button
                       size="sm"
                       variant="ghost"
-                      onClick={() =>
-                        copyToClipboard(keyword, `matched-${index}`)
-                      }
+                      onClick={() => copyToClipboard(keyword)}
+                      className="hover:bg-teal-50 hover:text-teal-700 ring-1 ring-transparent hover:ring-teal-200 rounded transition-colors"
                     >
                       <Copy className="w-3 h-3" />
                     </Button>
@@ -243,9 +413,8 @@ export default function AnalyzePage() {
                     <Button
                       size="sm"
                       variant="ghost"
-                      onClick={() =>
-                        copyToClipboard(keyword, `missing-${index}`)
-                      }
+                      onClick={() => copyToClipboard(keyword)}
+                      className="hover:bg-teal-50 hover:text-teal-700 ring-1 ring-transparent hover:ring-teal-200 rounded transition-colors"
                     >
                       <Copy className="w-3 h-3" />
                     </Button>
@@ -349,19 +518,50 @@ export default function AnalyzePage() {
         <div className="flex flex-col sm:flex-row gap-4 justify-center">
           <Button
             size="lg"
-            className="bg-teal-600 hover:bg-teal-700 text-white px-8 py-3"
+            className={`bg-teal-600 hover:bg-teal-700 text-white px-8 py-3 ${
+              action === "sample" ? "opacity-70 cursor-not-allowed" : ""
+            }`}
+            onClick={handleRewriteFull}
           >
-            <Sparkles className="w-5 h-5 mr-2" />
-            Rewrite Full Resume
+            {isRewriting ? (
+              <>
+                <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                Rewriting...
+              </>
+            ) : (
+              <>
+                <Sparkles className="w-5 h-5 mr-2" />
+                Rewrite Full Resume
+              </>
+            )}
           </Button>
-          <Button
-            variant="outline"
-            size="lg"
-            className="border-teal-600 text-teal-600 hover:bg-teal-50 px-8 py-3"
-          >
-            <Download className="w-5 h-5 mr-2" />
-            Download Analysis
-          </Button>
+          <div className="relative" ref={downloadMenuRef}>
+            <Button
+              variant="outline"
+              size="lg"
+              className="border-teal-600 text-teal-600 hover:bg-teal-50 px-8 py-3"
+              onClick={() => setShowDownloadMenu((s) => !s)}
+            >
+              <Download className="w-5 h-5 mr-2" />
+              Download Analysis
+            </Button>
+            {showDownloadMenu && (
+              <div className="absolute right-0 mt-2 w-44 bg-white border border-gray-200 rounded-md shadow-lg z-50 p-1">
+                <button
+                  className="w-full text-left px-3 py-2 text-sm rounded hover:bg-teal-50 hover:text-teal-700"
+                  onClick={downloadJson}
+                >
+                  JSON (.json)
+                </button>
+                <button
+                  className="w-full text-left px-3 py-2 text-sm rounded hover:bg-teal-50 hover:text-teal-700"
+                  onClick={downloadMarkdown}
+                >
+                  Markdown (.md)
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </AppShell>

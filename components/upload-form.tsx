@@ -190,6 +190,8 @@ export function UploadForm({ onAnalyze, isLoading }: UploadFormProps) {
                     onChange={handleFileInput}
                     className="hidden"
                     id="file-upload"
+                    aria-label="Upload resume file"
+                    title="Upload resume file"
                   />
                   <button
                     type="button"
@@ -271,7 +273,7 @@ export function UploadForm({ onAnalyze, isLoading }: UploadFormProps) {
 
         {errors.resumeFile && (
           <p className="text-red-500 text-sm text-center">
-            {errors.resumeFile.message}
+            {String(errors.resumeFile.message)}
           </p>
         )}
       </form>

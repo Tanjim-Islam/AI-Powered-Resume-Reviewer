@@ -5,7 +5,11 @@ import { RewriteResponseSchema } from "@/lib/schemas";
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { resumeText, jobDescription } = body;
+    const { resumeText, jobDescription, analysis } = body as {
+      resumeText: string;
+      jobDescription?: string;
+      analysis?: Record<string, unknown>;
+    };
 
     if (!resumeText || resumeText.length < 200) {
       return NextResponse.json(
@@ -20,29 +24,45 @@ export async function POST(request: NextRequest) {
 
 Rewrite the resume below into a clean structure with these sections: Header, Summary, Skills grouped, Experience, Projects, Education, Certifications if any. Tailor wording to the job description if provided. Keep truthfulness, do not invent employers or degrees. Add metrics only when safely inferable from the text. Use crisp language.
 
+If analysis data is provided, thoughtfully incorporate its insights: prefer the suggested improved bullets when aligned with the resume facts, address missing sections when information exists, and reflect formatting tips in the markdown output. Do not fabricate details to satisfy suggestions.
+
 You must return a JSON object with exactly two fields:
 1. "markdown": A string containing the rewritten resume in Markdown format with clear headings and bullet lists
 2. "json": An object with the structured resume data containing header, summary, skills, experience, projects, education, and certifications
 
-The JSON structure must match this schema:
+The JSON structure must match this schema and include explicit contact fields when available:
 {
   "markdown": "string",
   "json": {
-    "header": {"name": "string", "title": "string", "location": "string", "links": ["string"]},
+    "header": {
+      "name": "string",
+      "title": "string",
+      "location": "string",
+      "phone": "string",
+      "email": "string",
+      "linkedin": "string",
+      "portfolio": "string",
+      "links": ["string"]
+    },
     "summary": "string",
     "skills": [{"group": "string", "items": ["string"]}],
     "experience": [{"company": "string", "role": "string", "start": "string", "end": "string", "bullets": ["string"], "tech": ["string"]}],
     "projects": [{"name": "string", "description": "string", "bullets": ["string"], "tech": ["string"]}],
-    "education": [{"school": "string", "degree": "string", "year": "string"}],
+    "education": [{"school": "string", "degree": "string", "year": "string", "cgpa": "string"}],
     "certifications": ["string"]
   }
-}`;
+}
+
+When a contact detail is missing from the source resume, return an empty string for that field rather than omitting the key.`;
 
     const userPrompt = `Resume:
 ${resumeText}
 
 Job Description:
-${jobDescription || "N/A"}`;
+${jobDescription || "N/A"}
+
+Analysis (may be empty):
+${analysis ? JSON.stringify(analysis) : "{}"}`;
 
     const rewrite = await llmProvider.generateJson(
       RewriteResponseSchema,

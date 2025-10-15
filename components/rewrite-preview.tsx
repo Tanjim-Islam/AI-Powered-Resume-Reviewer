@@ -1,94 +1,328 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import ReactMarkdown from "react-markdown";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import {
   Download,
   Copy,
   Eye,
   Edit3,
   FileText,
-  Sparkles,
   Loader2,
-  CheckCircle,
+  Save,
 } from "lucide-react";
 import { RewriteResponse } from "@/lib/schemas";
 
 interface RewritePreviewProps {
   rewriteData: RewriteResponse;
   onExport: (format: "docx" | "pdf") => Promise<void>;
-  isExporting: boolean;
+  onSave: (data: RewriteResponse["json"]) => Promise<void>;
+  exportingFormat: "docx" | "pdf" | null;
 }
+
+type EditableData = RewriteResponse["json"];
 
 export function RewritePreview({
   rewriteData,
   onExport,
-  isExporting,
+  onSave,
+  exportingFormat,
 }: RewritePreviewProps) {
   const [activeTab, setActiveTab] = useState("markdown");
-  const [editableData, setEditableData] = useState(rewriteData.json);
-  const [copiedItems, setCopiedItems] = useState<Set<string>>(new Set());
+  const [editableData, setEditableData] = useState<EditableData>(
+    rewriteData.json
+  );
+  const [isDirty, setIsDirty] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
-  const copyToClipboard = async (text: string, itemId: string) => {
+  useEffect(() => {
+    setEditableData(rewriteData.json);
+    setIsDirty(false);
+  }, [rewriteData.json]);
+
+  const markDirty = () => setIsDirty(true);
+
+  const handleSave = async () => {
+    if (!isDirty || isSaving) return;
+    setIsSaving(true);
+    try {
+      await onSave(editableData);
+      setIsDirty(false);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // Generate markdown from JSON data
+  const generateMarkdown = (data: EditableData): string => {
+    let markdown = "";
+
+    // Header
+    markdown += `# ${data.header.name}\n\n`;
+
+    if (data.header.title) {
+      markdown += `**${data.header.title}**\n\n`;
+    }
+
+    if (data.header.location) {
+      markdown += `${data.header.location}\n\n`;
+    }
+
+    // Contact info
+    const contacts = [
+      data.header.phone,
+      data.header.email,
+      data.header.linkedin,
+      data.header.portfolio,
+    ].filter(Boolean);
+
+    if (contacts.length > 0) {
+      markdown += `${contacts.join(" | ")}\n\n`;
+    }
+
+    // Summary
+    markdown += `## Summary\n\n${data.summary}\n\n`;
+
+    // Skills
+    markdown += `## Skills\n\n`;
+    data.skills.forEach((skillGroup) => {
+      markdown += `**${skillGroup.group}:** ${skillGroup.items.join(", ")}\n\n`;
+    });
+
+    // Experience
+    markdown += `## Experience\n\n`;
+    data.experience.forEach((exp) => {
+      markdown += `### ${exp.role} at ${exp.company}\n\n`;
+      markdown += `*${exp.start} - ${exp.end}*\n\n`;
+      exp.bullets.forEach((bullet) => {
+        markdown += `- ${bullet}\n`;
+      });
+      markdown += "\n";
+    });
+
+    // Projects
+    if (data.projects.length > 0) {
+      markdown += `## Projects\n\n`;
+      data.projects.forEach((project) => {
+        markdown += `### ${project.name}\n\n`;
+        markdown += `${project.description}\n\n`;
+        project.bullets.forEach((bullet) => {
+          markdown += `- ${bullet}\n`;
+        });
+        markdown += "\n";
+      });
+    }
+
+    // Education
+    markdown += `## Education\n\n`;
+    data.education.forEach((edu) => {
+      markdown += `- **${edu.degree}** - ${edu.school}`;
+      if (edu.year) {
+        markdown += ` (${edu.year})`;
+      }
+      if (edu.cgpa) {
+        markdown += ` - CGPA: ${edu.cgpa}`;
+      }
+      markdown += "\n";
+    });
+    markdown += "\n";
+
+    // Certifications
+    if (data.certifications && data.certifications.length > 0) {
+      markdown += `## Certifications\n\n`;
+      data.certifications.forEach((cert) => {
+        markdown += `- ${cert}\n`;
+      });
+      markdown += "\n";
+    }
+
+    return markdown.trim();
+  };
+
+  // Generate markdown whenever editableData changes
+  const currentMarkdown = useMemo(
+    () => generateMarkdown(editableData),
+    [editableData]
+  );
+
+  const copyToClipboard = async (text: string) => {
     try {
       await navigator.clipboard.writeText(text);
-      setCopiedItems((prev) => new Set(prev).add(itemId));
-      setTimeout(() => {
-        setCopiedItems((prev) => {
-          const newSet = new Set(prev);
-          newSet.delete(itemId);
-          return newSet;
-        });
-      }, 2000);
     } catch (error) {
       console.error("Failed to copy:", error);
     }
   };
 
-  const updateField = (section: string, field: string, value: string) => {
-    setEditableData((prev) => ({
-      ...prev,
-      [section]: {
-        ...prev[section as keyof typeof prev],
-        [field]: value,
-      },
-    }));
-  };
-
-  const updateArrayField = (
-    section: string,
-    index: number,
+  const updateField = (
+    section: keyof EditableData,
     field: string,
     value: string
   ) => {
     setEditableData((prev) => ({
       ...prev,
-      [section]: prev[section as keyof typeof prev].map(
-        (item: any, i: number) =>
-          i === index ? { ...item, [field]: value } : item
-      ),
+      [section]: {
+        ...(prev[section] as Record<string, unknown>),
+        [field]: value,
+      },
     }));
+    markDirty();
   };
 
-  const addArrayItem = (section: string, newItem: any) => {
-    setEditableData((prev) => ({
-      ...prev,
-      [section]: [...prev[section as keyof typeof prev], newItem],
-    }));
+  const updateArrayField = (
+    section: keyof EditableData,
+    index: number,
+    field: string,
+    value: string
+  ) => {
+    let didUpdate = false;
+    setEditableData((prev) => {
+      const currentSection = prev[section];
+      if (Array.isArray(currentSection) && currentSection.length > 0) {
+        // Type guard to ensure we're dealing with objects, not strings
+        if (
+          typeof currentSection[0] === "object" &&
+          currentSection[0] !== null
+        ) {
+          const arr = currentSection as Array<Record<string, unknown>>;
+          didUpdate = true;
+          return {
+            ...prev,
+            [section]: arr.map((item, i) =>
+              i === index ? { ...item, [field]: value } : item
+            ) as typeof currentSection,
+          };
+        }
+      }
+      return prev;
+    });
+    if (didUpdate) markDirty();
   };
 
-  const removeArrayItem = (section: string, index: number) => {
-    setEditableData((prev) => ({
-      ...prev,
-      [section]: prev[section as keyof typeof prev].filter(
-        (_: any, i: number) => i !== index
-      ),
-    }));
+  const updateNestedArrayField = (
+    section: keyof EditableData,
+    arrayIndex: number,
+    field: string,
+    itemIndex: number,
+    value: string
+  ) => {
+    let didUpdate = false;
+    setEditableData((prev) => {
+      const currentSection = prev[section];
+      if (Array.isArray(currentSection) && currentSection.length > 0) {
+        if (
+          typeof currentSection[0] === "object" &&
+          currentSection[0] !== null
+        ) {
+          const arr = currentSection as Array<Record<string, unknown>>;
+          didUpdate = true;
+          return {
+            ...prev,
+            [section]: arr.map((item, i) =>
+              i === arrayIndex
+                ? {
+                    ...item,
+                    [field]: (item[field] as string[]).map((str, j) =>
+                      j === itemIndex ? value : str
+                    ),
+                  }
+                : item
+            ) as typeof currentSection,
+          };
+        }
+      }
+      return prev;
+    });
+    if (didUpdate) markDirty();
+  };
+
+  const updateSkillsArrayItem = (
+    section: keyof EditableData,
+    arrayIndex: number,
+    itemIndex: number,
+    value: string
+  ) => {
+    let didUpdate = false;
+    setEditableData((prev) => {
+      const currentSection = prev[section];
+      if (Array.isArray(currentSection) && currentSection.length > 0) {
+        if (
+          typeof currentSection[0] === "object" &&
+          currentSection[0] !== null
+        ) {
+          const arr = currentSection as Array<Record<string, unknown>>;
+          didUpdate = true;
+          return {
+            ...prev,
+            [section]: arr.map((item, i) =>
+              i === arrayIndex
+                ? {
+                    ...item,
+                    items: (item.items as string[]).map((str, j) =>
+                      j === itemIndex ? value : str
+                    ),
+                  }
+                : item
+            ) as typeof currentSection,
+          };
+        }
+      }
+      return prev;
+    });
+    if (didUpdate) markDirty();
+  };
+
+  const addArrayItem = (
+    section: keyof EditableData,
+    newItem: Record<string, unknown>
+  ) => {
+    let didUpdate = false;
+    setEditableData((prev) => {
+      const currentSection = prev[section];
+      if (Array.isArray(currentSection) && currentSection.length > 0) {
+        if (
+          typeof currentSection[0] === "object" &&
+          currentSection[0] !== null
+        ) {
+          const arr = currentSection as Array<Record<string, unknown>>;
+          didUpdate = true;
+          return {
+            ...prev,
+            [section]: [...arr, newItem] as unknown as typeof currentSection,
+          };
+        }
+      }
+      return prev;
+    });
+    if (didUpdate) markDirty();
+  };
+
+  const removeArrayItem = (section: keyof EditableData, index: number) => {
+    let didUpdate = false;
+    setEditableData((prev) => {
+      const currentSection = prev[section];
+      if (Array.isArray(currentSection) && currentSection.length > 0) {
+        if (
+          typeof currentSection[0] === "object" &&
+          currentSection[0] !== null
+        ) {
+          const arr = currentSection as Array<Record<string, unknown>>;
+          didUpdate = true;
+          return {
+            ...prev,
+            [section]: arr.filter(
+              (_, i) => i !== index
+            ) as unknown as typeof currentSection,
+          };
+        }
+      }
+      return prev;
+    });
+    if (didUpdate) markDirty();
   };
 
   return (
@@ -123,23 +357,36 @@ export function RewritePreview({
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() =>
-                  copyToClipboard(rewriteData.markdown, "markdown")
-                }
+                onClick={() => copyToClipboard(currentMarkdown)}
               >
                 <Copy className="w-4 h-4 mr-2" />
                 Copy Markdown
               </Button>
             </div>
             <div className="prose max-w-none">
-              <pre className="whitespace-pre-wrap text-sm text-gray-700 bg-gray-50 p-4 rounded-lg overflow-x-auto">
-                {rewriteData.markdown}
-              </pre>
+              <div className="bg-gray-50 p-4 rounded-lg overflow-x-auto text-sm text-gray-700">
+                <ReactMarkdown>{currentMarkdown}</ReactMarkdown>
+              </div>
             </div>
           </Card>
         </TabsContent>
 
         <TabsContent value="edit" className="space-y-6">
+          <div className="flex justify-end">
+            <Button
+              onClick={handleSave}
+              disabled={!isDirty || isSaving}
+              className="bg-teal-600 hover:bg-teal-700 text-white"
+            >
+              {isSaving ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <Save className="w-4 h-4 mr-2" />
+              )}
+              {isSaving ? "Saving..." : "Save Changes"}
+            </Button>
+          </div>
+
           {/* Header Section */}
           <Card className="p-6 bg-white/80 backdrop-blur-sm border-white/20">
             <h3 className="text-lg font-semibold text-gray-800 mb-4">
@@ -179,6 +426,50 @@ export function RewritePreview({
                   }
                 />
               </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Phone
+                </label>
+                <Input
+                  value={editableData.header.phone || ""}
+                  onChange={(e) =>
+                    updateField("header", "phone", e.target.value)
+                  }
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Email
+                </label>
+                <Input
+                  value={editableData.header.email || ""}
+                  onChange={(e) =>
+                    updateField("header", "email", e.target.value)
+                  }
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  LinkedIn
+                </label>
+                <Input
+                  value={editableData.header.linkedin || ""}
+                  onChange={(e) =>
+                    updateField("header", "linkedin", e.target.value)
+                  }
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Portfolio
+                </label>
+                <Input
+                  value={editableData.header.portfolio || ""}
+                  onChange={(e) =>
+                    updateField("header", "portfolio", e.target.value)
+                  }
+                />
+              </div>
             </div>
           </Card>
 
@@ -189,12 +480,13 @@ export function RewritePreview({
             </h3>
             <Textarea
               value={editableData.summary}
-              onChange={(e) =>
+              onChange={(e) => {
                 setEditableData((prev) => ({
                   ...prev,
                   summary: e.target.value,
-                }))
-              }
+                }));
+                markDirty();
+              }}
               className="min-h-32"
             />
           </Card>
@@ -236,13 +528,11 @@ export function RewritePreview({
                         <Input
                           value={item}
                           onChange={(e) => {
-                            const newItems = [...skillGroup.items];
-                            newItems[itemIndex] = e.target.value;
-                            updateArrayField(
+                            updateSkillsArrayItem(
                               "skills",
                               index,
-                              "items",
-                              newItems.join(", ")
+                              itemIndex,
+                              e.target.value
                             );
                           }}
                           className="w-auto min-w-0"
@@ -353,13 +643,12 @@ export function RewritePreview({
                           <Input
                             value={bullet}
                             onChange={(e) => {
-                              const newBullets = [...exp.bullets];
-                              newBullets[bulletIndex] = e.target.value;
-                              updateArrayField(
+                              updateNestedArrayField(
                                 "experience",
                                 index,
                                 "bullets",
-                                newBullets
+                                bulletIndex,
+                                e.target.value
                               );
                             }}
                           />
@@ -370,12 +659,21 @@ export function RewritePreview({
                               const newBullets = exp.bullets.filter(
                                 (_, i) => i !== bulletIndex
                               );
-                              updateArrayField(
-                                "experience",
-                                index,
-                                "bullets",
-                                newBullets
-                              );
+                              setEditableData((prev) => {
+                                const currentSection = prev.experience;
+                                if (Array.isArray(currentSection)) {
+                                  return {
+                                    ...prev,
+                                    experience: currentSection.map((item, i) =>
+                                      i === index
+                                        ? { ...item, bullets: newBullets }
+                                        : item
+                                    ),
+                                  };
+                                }
+                                return prev;
+                              });
+                              markDirty();
                             }}
                             className="text-red-500 hover:text-red-700"
                           >
@@ -388,12 +686,21 @@ export function RewritePreview({
                         size="sm"
                         onClick={() => {
                           const newBullets = [...exp.bullets, ""];
-                          updateArrayField(
-                            "experience",
-                            index,
-                            "bullets",
-                            newBullets
-                          );
+                          setEditableData((prev) => {
+                            const currentSection = prev.experience;
+                            if (Array.isArray(currentSection)) {
+                              return {
+                                ...prev,
+                                experience: currentSection.map((item, i) =>
+                                  i === index
+                                    ? { ...item, bullets: newBullets }
+                                    : item
+                                ),
+                              };
+                            }
+                            return prev;
+                          });
+                          markDirty();
                         }}
                       >
                         Add Bullet Point
@@ -487,13 +794,12 @@ export function RewritePreview({
                           <Input
                             value={bullet}
                             onChange={(e) => {
-                              const newBullets = [...project.bullets];
-                              newBullets[bulletIndex] = e.target.value;
-                              updateArrayField(
+                              updateNestedArrayField(
                                 "projects",
                                 index,
                                 "bullets",
-                                newBullets
+                                bulletIndex,
+                                e.target.value
                               );
                             }}
                           />
@@ -504,12 +810,21 @@ export function RewritePreview({
                               const newBullets = project.bullets.filter(
                                 (_, i) => i !== bulletIndex
                               );
-                              updateArrayField(
-                                "projects",
-                                index,
-                                "bullets",
-                                newBullets
-                              );
+                              setEditableData((prev) => {
+                                const currentSection = prev.projects;
+                                if (Array.isArray(currentSection)) {
+                                  return {
+                                    ...prev,
+                                    projects: currentSection.map((item, i) =>
+                                      i === index
+                                        ? { ...item, bullets: newBullets }
+                                        : item
+                                    ),
+                                  };
+                                }
+                                return prev;
+                              });
+                              markDirty();
                             }}
                             className="text-red-500 hover:text-red-700"
                           >
@@ -522,12 +837,21 @@ export function RewritePreview({
                         size="sm"
                         onClick={() => {
                           const newBullets = [...project.bullets, ""];
-                          updateArrayField(
-                            "projects",
-                            index,
-                            "bullets",
-                            newBullets
-                          );
+                          setEditableData((prev) => {
+                            const currentSection = prev.projects;
+                            if (Array.isArray(currentSection)) {
+                              return {
+                                ...prev,
+                                projects: currentSection.map((item, i) =>
+                                  i === index
+                                    ? { ...item, bullets: newBullets }
+                                    : item
+                                ),
+                              };
+                            }
+                            return prev;
+                          });
+                          markDirty();
                         }}
                       >
                         Add Bullet Point
@@ -572,7 +896,7 @@ export function RewritePreview({
                   key={index}
                   className="border border-gray-200 rounded-lg p-4"
                 >
-                  <div className="grid md:grid-cols-3 gap-4">
+                  <div className="grid md:grid-cols-4 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
                         School
@@ -621,6 +945,22 @@ export function RewritePreview({
                         }
                       />
                     </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        CGPA
+                      </label>
+                      <Input
+                        value={edu.cgpa || ""}
+                        onChange={(e) =>
+                          updateArrayField(
+                            "education",
+                            index,
+                            "cgpa",
+                            e.target.value
+                          )
+                        }
+                      />
+                    </div>
                   </div>
                   <div className="mt-4 flex justify-end">
                     <Button
@@ -641,6 +981,7 @@ export function RewritePreview({
                     school: "",
                     degree: "",
                     year: "",
+                    cgpa: "",
                   })
                 }
               >
@@ -657,10 +998,10 @@ export function RewritePreview({
           <Button
             size="lg"
             onClick={() => onExport("docx")}
-            disabled={isExporting}
+            disabled={exportingFormat !== null}
             className="bg-teal-600 hover:bg-teal-700 text-white px-8 py-3"
           >
-            {isExporting ? (
+            {exportingFormat === "docx" ? (
               <Loader2 className="w-5 h-5 mr-2 animate-spin" />
             ) : (
               <Download className="w-5 h-5 mr-2" />
@@ -671,10 +1012,10 @@ export function RewritePreview({
             size="lg"
             variant="outline"
             onClick={() => onExport("pdf")}
-            disabled={isExporting}
+            disabled={exportingFormat !== null}
             className="border-teal-600 text-teal-600 hover:bg-teal-50 px-8 py-3"
           >
-            {isExporting ? (
+            {exportingFormat === "pdf" ? (
               <Loader2 className="w-5 h-5 mr-2 animate-spin" />
             ) : (
               <FileText className="w-5 h-5 mr-2" />

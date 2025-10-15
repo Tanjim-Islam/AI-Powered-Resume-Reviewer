@@ -85,6 +85,7 @@ export default function Home() {
               variant="outline"
               size="lg"
               className="border-teal-600 text-teal-600 hover:bg-teal-50 px-8 py-3 text-lg"
+              onClick={() => router.push("/analyze?action=sample")}
             >
               <BarChart3 className="w-5 h-5 mr-2" />
               View Sample Analysis
@@ -95,52 +96,6 @@ export default function Home() {
         {/* Upload Form */}
         <div data-animate="scaleIn" data-delay="0.8" className="mb-12">
           <UploadForm onAnalyze={handleAnalyze} isLoading={isAnalyzing} />
-        </div>
-
-        {/* Features Grid */}
-        <div
-          className="grid md:grid-cols-3 gap-8"
-          data-stagger="true"
-          data-stagger-delay="0.1"
-        >
-          <div className="text-center p-6 bg-white/60 backdrop-blur-sm rounded-lg border border-white/20">
-            <div className="w-12 h-12 bg-teal-100 rounded-lg flex items-center justify-center mx-auto mb-4">
-              <BarChart3 className="w-6 h-6 text-teal-600" />
-            </div>
-            <h3 className="text-lg font-semibold text-gray-800 mb-2">
-              ATS Score
-            </h3>
-            <p className="text-gray-600 text-sm">
-              Get a detailed ATS friendliness score with specific improvement
-              areas
-            </p>
-          </div>
-
-          <div className="text-center p-6 bg-white/60 backdrop-blur-sm rounded-lg border border-white/20">
-            <div className="w-12 h-12 bg-teal-100 rounded-lg flex items-center justify-center mx-auto mb-4">
-              <FileText className="w-6 h-6 text-teal-600" />
-            </div>
-            <h3 className="text-lg font-semibold text-gray-800 mb-2">
-              Keyword Analysis
-            </h3>
-            <p className="text-gray-600 text-sm">
-              Compare your resume against job descriptions for optimal keyword
-              matching
-            </p>
-          </div>
-
-          <div className="text-center p-6 bg-white/60 backdrop-blur-sm rounded-lg border border-white/20">
-            <div className="w-12 h-12 bg-teal-100 rounded-lg flex items-center justify-center mx-auto mb-4">
-              <Sparkles className="w-6 h-6 text-teal-600" />
-            </div>
-            <h3 className="text-lg font-semibold text-gray-800 mb-2">
-              AI Rewriting
-            </h3>
-            <p className="text-gray-600 text-sm">
-              Get a completely rewritten resume with improved content and
-              structure
-            </p>
-          </div>
         </div>
       </div>
     </AppShell>

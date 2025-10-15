@@ -3,6 +3,7 @@
 import { AppShell } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import Link from "next/link";
 import { FileText, Target, CheckCircle, AlertCircle } from "lucide-react";
 
 export default function AboutPage() {
@@ -263,12 +264,12 @@ export default function AboutPage() {
               Upload your resume and get instant feedback on how to improve your
               ATS score
             </p>
-            <a
+            <Link
               href="/"
               className="inline-block bg-teal-600 hover:bg-teal-700 text-white px-8 py-3 rounded-lg font-medium transition-colors"
             >
               Get Started Now
-            </a>
+            </Link>
           </div>
         </div>
       </div>

@@ -6,17 +6,32 @@ import { RewritePreview } from "@/components/rewrite-preview";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
-import { Input } from "@/components/ui/input";
-import { Loader2, Upload, FileText } from "lucide-react";
+import { Loader2, FileText } from "lucide-react";
 import { RewriteResponse } from "@/lib/schemas";
 
 export default function RewritePage() {
   const [resumeText, setResumeText] = useState("");
   const [jobDescription, setJobDescription] = useState("");
   const [isRewriting, setIsRewriting] = useState(false);
-  const [isExporting, setIsExporting] = useState(false);
+  const [exportingFormat, setExportingFormat] = useState<"docx" | "pdf" | null>(
+    null
+  );
   const [rewriteData, setRewriteData] = useState<RewriteResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // Hydrate from precomputed rewrite if available
+  useEffect(() => {
+    try {
+      const stored = sessionStorage.getItem("rewriteResult");
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        setRewriteData(parsed);
+        sessionStorage.removeItem("rewriteResult");
+      }
+    } catch {
+      // ignore hydration failure
+    }
+  }, []);
 
   const handleRewrite = async () => {
     if (!resumeText.trim()) {
@@ -54,10 +69,24 @@ export default function RewritePage() {
     }
   };
 
+  const handleSave = async (updatedJson: RewriteResponse["json"]) => {
+    if (!rewriteData) return;
+    const nextData: RewriteResponse = {
+      ...rewriteData,
+      json: updatedJson,
+    };
+    setRewriteData(nextData);
+    try {
+      sessionStorage.setItem("rewriteResult", JSON.stringify(nextData));
+    } catch {
+      // ignore storage errors
+    }
+  };
+
   const handleExport = async (format: "docx" | "pdf") => {
     if (!rewriteData) return;
 
-    setIsExporting(true);
+    setExportingFormat(format);
     try {
       const response = await fetch("/api/export", {
         method: "POST",
@@ -89,7 +118,7 @@ export default function RewritePage() {
       console.error("Export error:", error);
       alert(error instanceof Error ? error.message : "Export failed");
     } finally {
-      setIsExporting(false);
+      setExportingFormat(null);
     }
   };
 
@@ -172,54 +201,15 @@ export default function RewritePage() {
                 </Button>
               </form>
             </Card>
-
-            {/* Features */}
-            <div className="grid md:grid-cols-3 gap-6 mt-12">
-              <div className="text-center p-6 bg-white/60 backdrop-blur-sm rounded-lg border border-white/20">
-                <div className="w-12 h-12 bg-teal-100 rounded-lg flex items-center justify-center mx-auto mb-4">
-                  <span className="text-teal-600 font-bold text-lg">✨</span>
-                </div>
-                <h3 className="text-lg font-semibold text-gray-800 mb-2">
-                  AI-Powered Content
-                </h3>
-                <p className="text-gray-600 text-sm">
-                  Get professionally rewritten content with improved action
-                  verbs and measurable impact
-                </p>
-              </div>
-
-              <div className="text-center p-6 bg-white/60 backdrop-blur-sm rounded-lg border border-white/20">
-                <div className="w-12 h-12 bg-teal-100 rounded-lg flex items-center justify-center mx-auto mb-4">
-                  <span className="text-teal-600 font-bold text-lg">🎯</span>
-                </div>
-                <h3 className="text-lg font-semibold text-gray-800 mb-2">
-                  Job-Tailored
-                </h3>
-                <p className="text-gray-600 text-sm">
-                  Customize your resume for specific job descriptions to
-                  maximize relevance
-                </p>
-              </div>
-
-              <div className="text-center p-6 bg-white/60 backdrop-blur-sm rounded-lg border border-white/20">
-                <div className="w-12 h-12 bg-teal-100 rounded-lg flex items-center justify-center mx-auto mb-4">
-                  <span className="text-teal-600 font-bold text-lg">📄</span>
-                </div>
-                <h3 className="text-lg font-semibold text-gray-800 mb-2">
-                  Export Ready
-                </h3>
-                <p className="text-gray-600 text-sm">
-                  Download your improved resume in DOCX or PDF format, ready to
-                  submit
-                </p>
-              </div>
-            </div>
           </div>
         ) : (
           <RewritePreview
             rewriteData={rewriteData}
             onExport={handleExport}
-            isExporting={isExporting}
+            onSave={async (data) => {
+              await handleSave(data);
+            }}
+            exportingFormat={exportingFormat}
           />
         )}
       </div>
