@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Document, Packer, Paragraph, TextRun, HeadingLevel } from "docx";
 import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
-import { ExportRequestSchema } from "@/lib/schemas";
+import { ExportRequestSchema, RewriteResponse } from "@/lib/schemas";
 
 export async function POST(request: NextRequest) {
   try {
@@ -11,7 +11,7 @@ export async function POST(request: NextRequest) {
     if (format === "docx") {
       const docxBuffer = await generateDocx(rewriteJson);
 
-      return new NextResponse(docxBuffer, {
+      return new NextResponse(new Uint8Array(docxBuffer), {
         headers: {
           "Content-Type":
             "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -21,7 +21,7 @@ export async function POST(request: NextRequest) {
     } else if (format === "pdf") {
       const pdfBuffer = await generatePdf(rewriteJson);
 
-      return new NextResponse(pdfBuffer, {
+      return new NextResponse(new Uint8Array(pdfBuffer), {
         headers: {
           "Content-Type": "application/pdf",
           "Content-Disposition": `attachment; filename="resume-${Date.now()}.pdf"`,
@@ -47,7 +47,9 @@ export async function POST(request: NextRequest) {
   }
 }
 
-async function generateDocx(resumeData: any): Promise<Buffer> {
+async function generateDocx(
+  resumeData: RewriteResponse["json"]
+): Promise<Buffer> {
   const doc = new Document({
     sections: [
       {
@@ -122,21 +124,23 @@ async function generateDocx(resumeData: any): Promise<Buffer> {
             ],
             heading: HeadingLevel.HEADING_2,
           }),
-          ...resumeData.skills.flatMap((skillGroup: any) => [
-            new Paragraph({
-              children: [
-                new TextRun({
-                  text: `${skillGroup.group}: `,
-                  bold: true,
-                  size: 20,
-                }),
-                new TextRun({
-                  text: skillGroup.items.join(", "),
-                  size: 20,
-                }),
-              ],
-            }),
-          ]),
+          ...resumeData.skills.flatMap(
+            (skillGroup: { group: string; items: string[] }) => [
+              new Paragraph({
+                children: [
+                  new TextRun({
+                    text: `${skillGroup.group}: `,
+                    bold: true,
+                    size: 20,
+                  }),
+                  new TextRun({
+                    text: skillGroup.items.join(", "),
+                    size: 20,
+                  }),
+                ],
+              }),
+            ]
+          ),
 
           // Experience
           new Paragraph({
@@ -149,36 +153,45 @@ async function generateDocx(resumeData: any): Promise<Buffer> {
             ],
             heading: HeadingLevel.HEADING_2,
           }),
-          ...resumeData.experience.flatMap((exp: any) => [
-            new Paragraph({
-              children: [
-                new TextRun({
-                  text: `${exp.role} at ${exp.company}`,
-                  bold: true,
-                  size: 20,
-                }),
-              ],
-            }),
-            new Paragraph({
-              children: [
-                new TextRun({
-                  text: `${exp.start} - ${exp.end}`,
-                  size: 18,
-                }),
-              ],
-            }),
-            ...exp.bullets.map(
-              (bullet: string) =>
-                new Paragraph({
-                  children: [
-                    new TextRun({
-                      text: `• ${bullet}`,
-                      size: 20,
-                    }),
-                  ],
-                })
-            ),
-          ]),
+          ...resumeData.experience.flatMap(
+            (exp: {
+              company: string;
+              role: string;
+              start: string;
+              end: string;
+              bullets: string[];
+              tech?: string[];
+            }) => [
+              new Paragraph({
+                children: [
+                  new TextRun({
+                    text: `${exp.role} at ${exp.company}`,
+                    bold: true,
+                    size: 20,
+                  }),
+                ],
+              }),
+              new Paragraph({
+                children: [
+                  new TextRun({
+                    text: `${exp.start} - ${exp.end}`,
+                    size: 18,
+                  }),
+                ],
+              }),
+              ...exp.bullets.map(
+                (bullet: string) =>
+                  new Paragraph({
+                    children: [
+                      new TextRun({
+                        text: `• ${bullet}`,
+                        size: 20,
+                      }),
+                    ],
+                  })
+              ),
+            ]
+          ),
 
           // Projects
           ...(resumeData.projects.length > 0
@@ -193,36 +206,43 @@ async function generateDocx(resumeData: any): Promise<Buffer> {
                   ],
                   heading: HeadingLevel.HEADING_2,
                 }),
-                ...resumeData.projects.flatMap((project: any) => [
-                  new Paragraph({
-                    children: [
-                      new TextRun({
-                        text: project.name,
-                        bold: true,
-                        size: 20,
-                      }),
-                    ],
-                  }),
-                  new Paragraph({
-                    children: [
-                      new TextRun({
-                        text: project.description,
-                        size: 20,
-                      }),
-                    ],
-                  }),
-                  ...project.bullets.map(
-                    (bullet: string) =>
-                      new Paragraph({
-                        children: [
-                          new TextRun({
-                            text: `• ${bullet}`,
-                            size: 20,
-                          }),
-                        ],
-                      })
-                  ),
-                ]),
+                ...resumeData.projects.flatMap(
+                  (project: {
+                    name: string;
+                    description: string;
+                    bullets: string[];
+                    tech?: string[];
+                  }) => [
+                    new Paragraph({
+                      children: [
+                        new TextRun({
+                          text: project.name,
+                          bold: true,
+                          size: 20,
+                        }),
+                      ],
+                    }),
+                    new Paragraph({
+                      children: [
+                        new TextRun({
+                          text: project.description,
+                          size: 20,
+                        }),
+                      ],
+                    }),
+                    ...project.bullets.map(
+                      (bullet: string) =>
+                        new Paragraph({
+                          children: [
+                            new TextRun({
+                              text: `• ${bullet}`,
+                              size: 20,
+                            }),
+                          ],
+                        })
+                    ),
+                  ]
+                ),
               ]
             : []),
 
@@ -238,7 +258,7 @@ async function generateDocx(resumeData: any): Promise<Buffer> {
             heading: HeadingLevel.HEADING_2,
           }),
           ...resumeData.education.map(
-            (edu: any) =>
+            (edu: { school: string; degree: string; year?: string }) =>
               new Paragraph({
                 children: [
                   new TextRun({
@@ -284,7 +304,9 @@ async function generateDocx(resumeData: any): Promise<Buffer> {
   return Buffer.from(await Packer.toBuffer(doc));
 }
 
-async function generatePdf(resumeData: any): Promise<Buffer> {
+async function generatePdf(
+  resumeData: RewriteResponse["json"]
+): Promise<Buffer> {
   const pdfDoc = await PDFDocument.create();
   const page = pdfDoc.addPage([612, 792]); // Letter size
   const { width, height } = page.getSize();

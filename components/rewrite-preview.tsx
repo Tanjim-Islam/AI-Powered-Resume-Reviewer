@@ -69,13 +69,13 @@ export function RewritePreview({
     setEditableData((prev) => ({
       ...prev,
       [section]: prev[section as keyof typeof prev].map(
-        (item: any, i: number) =>
+        (item: Record<string, unknown>, i: number) =>
           i === index ? { ...item, [field]: value } : item
       ),
     }));
   };
 
-  const addArrayItem = (section: string, newItem: any) => {
+  const addArrayItem = (section: string, newItem: Record<string, unknown>) => {
     setEditableData((prev) => ({
       ...prev,
       [section]: [...prev[section as keyof typeof prev], newItem],
@@ -86,7 +86,7 @@ export function RewritePreview({
     setEditableData((prev) => ({
       ...prev,
       [section]: prev[section as keyof typeof prev].filter(
-        (_: any, i: number) => i !== index
+        (_: Record<string, unknown>, i: number) => i !== index
       ),
     }));
   };

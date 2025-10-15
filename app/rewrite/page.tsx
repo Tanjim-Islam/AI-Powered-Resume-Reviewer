@@ -172,48 +172,6 @@ export default function RewritePage() {
                 </Button>
               </form>
             </Card>
-
-            {/* Features */}
-            <div className="grid md:grid-cols-3 gap-6 mt-12">
-              <div className="text-center p-6 bg-white/60 backdrop-blur-sm rounded-lg border border-white/20">
-                <div className="w-12 h-12 bg-teal-100 rounded-lg flex items-center justify-center mx-auto mb-4">
-                  <span className="text-teal-600 font-bold text-lg">✨</span>
-                </div>
-                <h3 className="text-lg font-semibold text-gray-800 mb-2">
-                  AI-Powered Content
-                </h3>
-                <p className="text-gray-600 text-sm">
-                  Get professionally rewritten content with improved action
-                  verbs and measurable impact
-                </p>
-              </div>
-
-              <div className="text-center p-6 bg-white/60 backdrop-blur-sm rounded-lg border border-white/20">
-                <div className="w-12 h-12 bg-teal-100 rounded-lg flex items-center justify-center mx-auto mb-4">
-                  <span className="text-teal-600 font-bold text-lg">🎯</span>
-                </div>
-                <h3 className="text-lg font-semibold text-gray-800 mb-2">
-                  Job-Tailored
-                </h3>
-                <p className="text-gray-600 text-sm">
-                  Customize your resume for specific job descriptions to
-                  maximize relevance
-                </p>
-              </div>
-
-              <div className="text-center p-6 bg-white/60 backdrop-blur-sm rounded-lg border border-white/20">
-                <div className="w-12 h-12 bg-teal-100 rounded-lg flex items-center justify-center mx-auto mb-4">
-                  <span className="text-teal-600 font-bold text-lg">📄</span>
-                </div>
-                <h3 className="text-lg font-semibold text-gray-800 mb-2">
-                  Export Ready
-                </h3>
-                <p className="text-gray-600 text-sm">
-                  Download your improved resume in DOCX or PDF format, ready to
-                  submit
-                </p>
-              </div>
-            </div>
           </div>
         ) : (
           <RewritePreview

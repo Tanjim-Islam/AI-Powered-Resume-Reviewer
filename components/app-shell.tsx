@@ -1,6 +1,7 @@
 "use client";
 
 import { ReactNode } from "react";
+import Link from "next/link";
 import { Card } from "@/components/ui/card";
 
 interface AppShellProps {
@@ -23,18 +24,18 @@ export function AppShell({ children, className = "" }: AppShellProps) {
               </h1>
             </div>
             <nav className="hidden md:flex items-center space-x-6">
-              <a
+              <Link
                 href="/"
                 className="text-gray-600 hover:text-teal-600 transition-colors"
               >
                 Home
-              </a>
-              <a
+              </Link>
+              <Link
                 href="/about"
                 className="text-gray-600 hover:text-teal-600 transition-colors"
               >
                 About
-              </a>
+              </Link>
             </nav>
           </div>
         </div>
@@ -45,7 +46,9 @@ export function AppShell({ children, className = "" }: AppShellProps) {
       <footer className="w-full border-t border-white/20 backdrop-blur-sm bg-white/10">
         <div className="container mx-auto px-4 py-6">
           <div className="text-center text-sm text-gray-600">
-            <p>© 2024 Resume Reviewer. Built with Next.js and AI.</p>
+            <p>
+              © 2024 Resume Reviewer. Built with brutal truth. Resumes quake.
+            </p>
           </div>
         </div>
       </footer>

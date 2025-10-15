@@ -13,7 +13,6 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   BarChart3,
   CheckCircle,
@@ -25,35 +24,91 @@ import {
   FileText,
   Lightbulb,
 } from "lucide-react";
-import { AnalyzeResponse, BulletSuggestion } from "@/lib/schemas";
+import { AnalyzeResponse } from "@/lib/schemas";
 
 export default function AnalyzePage() {
   const [analysis, setAnalysis] = useState<AnalyzeResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [copiedItems, setCopiedItems] = useState<Set<string>>(new Set());
   const searchParams = useSearchParams();
   const action = searchParams.get("action");
 
   useEffect(() => {
-    // Get analysis from sessionStorage
-    const storedAnalysis = sessionStorage.getItem("resumeAnalysis");
-    if (storedAnalysis) {
-      setAnalysis(JSON.parse(storedAnalysis));
+    // Check if this is a sample analysis request
+    if (action === "sample") {
+      // Load sample data
+      setAnalysis(getSampleAnalysis());
+      setIsLoading(false);
+    } else {
+      // Get analysis from sessionStorage for real analysis
+      const storedAnalysis = sessionStorage.getItem("resumeAnalysis");
+      if (storedAnalysis) {
+        setAnalysis(JSON.parse(storedAnalysis));
+      }
+      setIsLoading(false);
     }
-    setIsLoading(false);
-  }, []);
+  }, [action]);
 
-  const copyToClipboard = async (text: string, itemId: string) => {
+  // Sample analysis data
+  const getSampleAnalysis = (): AnalyzeResponse => {
+    return {
+      ats_score: 78,
+      keyword_match: {
+        matched: [
+          "project management",
+          "leadership",
+          "team collaboration",
+          "strategic planning",
+          "budget management",
+        ],
+        missing: [
+          "agile methodology",
+          "stakeholder management",
+          "risk assessment",
+          "change management",
+        ],
+      },
+      bullet_suggestions: [
+        {
+          original: "Managed team of 5 developers",
+          improved:
+            "Led a high-performing team of 5 developers, implementing agile methodologies that increased productivity by 25%",
+          rationale: "Added quantifiable impact and specific methodology",
+        },
+        {
+          original: "Worked on various projects",
+          improved:
+            "Directed 15+ cross-functional projects from conception to completion, consistently delivering on time and under budget",
+          rationale: "Added specificity and demonstrated leadership",
+        },
+        {
+          original: "Handled client communications",
+          improved:
+            "Served as primary client liaison, managing expectations and resolving issues to maintain 98% client satisfaction rate",
+          rationale: "Added measurable outcomes and specific responsibilities",
+        },
+      ],
+      missing_sections: ["Professional Summary", "Certifications"],
+      formatting_tips: [
+        "Use consistent bullet point formatting",
+        "Add quantifiable achievements where possible",
+        "Include industry-specific keywords",
+        "Keep resume to 1-2 pages",
+      ],
+      inferred_structure: {
+        sectionsPresent: [
+          "Contact Information",
+          "Professional Experience",
+          "Education",
+          "Skills",
+        ],
+        sectionsMissing: ["Professional Summary", "Certifications", "Projects"],
+      },
+    };
+  };
+
+  const copyToClipboard = async (text: string) => {
     try {
       await navigator.clipboard.writeText(text);
-      setCopiedItems((prev) => new Set(prev).add(itemId));
-      setTimeout(() => {
-        setCopiedItems((prev) => {
-          const newSet = new Set(prev);
-          newSet.delete(itemId);
-          return newSet;
-        });
-      }, 2000);
     } catch (error) {
       console.error("Failed to copy:", error);
     }
@@ -63,12 +118,6 @@ export default function AnalyzePage() {
     if (score >= 80) return "text-green-600";
     if (score >= 60) return "text-yellow-600";
     return "text-red-600";
-  };
-
-  const getScoreBgColor = (score: number) => {
-    if (score >= 80) return "bg-green-100";
-    if (score >= 60) return "bg-yellow-100";
-    return "bg-red-100";
   };
 
   if (isLoading) {
@@ -126,8 +175,20 @@ export default function AnalyzePage() {
             Resume Analysis Results
           </h1>
           <p className="text-gray-600">
-            Here's your detailed ATS analysis and improvement suggestions
+            Here&apos;s your detailed ATS analysis and improvement suggestions
           </p>
+          {action === "sample" && (
+            <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg max-w-2xl mx-auto">
+              <div className="flex items-center justify-center gap-2 text-blue-800">
+                <span className="text-2xl">🎭</span>
+                <span className="font-medium">Sample Analysis</span>
+                <span className="text-sm text-blue-600">
+                  (This is demo data - upload your resume for personalized
+                  results)
+                </span>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Score Cards */}
@@ -211,9 +272,7 @@ export default function AnalyzePage() {
                     <Button
                       size="sm"
                       variant="ghost"
-                      onClick={() =>
-                        copyToClipboard(keyword, `matched-${index}`)
-                      }
+                      onClick={() => copyToClipboard(keyword)}
                     >
                       <Copy className="w-3 h-3" />
                     </Button>
@@ -243,9 +302,7 @@ export default function AnalyzePage() {
                     <Button
                       size="sm"
                       variant="ghost"
-                      onClick={() =>
-                        copyToClipboard(keyword, `missing-${index}`)
-                      }
+                      onClick={() => copyToClipboard(keyword)}
                     >
                       <Copy className="w-3 h-3" />
                     </Button>
