@@ -6,8 +6,7 @@ import { RewritePreview } from "@/components/rewrite-preview";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
-import { Input } from "@/components/ui/input";
-import { Loader2, Upload, FileText } from "lucide-react";
+import { Loader2, FileText } from "lucide-react";
 import { RewriteResponse } from "@/lib/schemas";
 
 export default function RewritePage() {
@@ -17,6 +16,20 @@ export default function RewritePage() {
   const [isExporting, setIsExporting] = useState(false);
   const [rewriteData, setRewriteData] = useState<RewriteResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // Hydrate from precomputed rewrite if available
+  useEffect(() => {
+    try {
+      const stored = sessionStorage.getItem("rewriteResult");
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        setRewriteData(parsed);
+        sessionStorage.removeItem("rewriteResult");
+      }
+    } catch {
+      // ignore hydration failure
+    }
+  }, []);
 
   const handleRewrite = async () => {
     if (!resumeText.trim()) {

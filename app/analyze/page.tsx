@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
@@ -23,12 +23,22 @@ import {
   TrendingUp,
   FileText,
   Lightbulb,
+  Loader2,
 } from "lucide-react";
 import { AnalyzeResponse } from "@/lib/schemas";
+import { toast } from "sonner";
+
+type AnalyzeWithSource = AnalyzeResponse & {
+  original_resume_text?: string;
+  job_description?: string;
+};
 
 export default function AnalyzePage() {
-  const [analysis, setAnalysis] = useState<AnalyzeResponse | null>(null);
+  const [analysis, setAnalysis] = useState<AnalyzeWithSource | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isRewriting, setIsRewriting] = useState(false);
+  const [showDownloadMenu, setShowDownloadMenu] = useState(false);
+  const downloadMenuRef = useRef<HTMLDivElement | null>(null);
   const searchParams = useSearchParams();
   const action = searchParams.get("action");
 
@@ -47,6 +57,19 @@ export default function AnalyzePage() {
       setIsLoading(false);
     }
   }, [action]);
+
+  useEffect(() => {
+    function onDocClick(e: MouseEvent) {
+      if (!downloadMenuRef.current) return;
+      if (!downloadMenuRef.current.contains(e.target as Node)) {
+        setShowDownloadMenu(false);
+      }
+    }
+    if (showDownloadMenu) {
+      document.addEventListener("click", onDocClick);
+    }
+    return () => document.removeEventListener("click", onDocClick);
+  }, [showDownloadMenu]);
 
   // Sample analysis data
   const getSampleAnalysis = (): AnalyzeResponse => {
@@ -109,9 +132,96 @@ export default function AnalyzePage() {
   const copyToClipboard = async (text: string) => {
     try {
       await navigator.clipboard.writeText(text);
+      toast.success("Copied!", { position: "top-center" });
     } catch (error) {
       console.error("Failed to copy:", error);
     }
+  };
+
+  const handleRewriteFull = async () => {
+    if (action === "sample" || !analysis?.original_resume_text) {
+      toast.error(
+        "Cannot rewrite from sample data. Upload your resume first.",
+        {
+          position: "top-center",
+        }
+      );
+      return;
+    }
+
+    setIsRewriting(true);
+    try {
+      const response = await fetch("/api/rewrite", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          resumeText: analysis.original_resume_text,
+          jobDescription: analysis.job_description || undefined,
+          analysis,
+        }),
+      });
+
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err.error || "Rewrite failed");
+      }
+
+      const data = await response.json();
+      sessionStorage.setItem("rewriteResult", JSON.stringify(data));
+      window.location.href = "/rewrite";
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Rewrite failed", {
+        position: "top-center",
+      });
+    } finally {
+      setIsRewriting(false);
+    }
+  };
+
+  const downloadJson = () => {
+    if (!analysis) return;
+    const blob = new Blob([JSON.stringify(analysis, null, 2)], {
+      type: "application/json",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `analysis-${Date.now()}.json`;
+    document.body.appendChild(a);
+    a.click();
+    URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+    setShowDownloadMenu(false);
+  };
+
+  const generateAnalysisMarkdown = (a: AnalyzeResponse): string => {
+    const matched = a.keyword_match.matched.join(", ");
+    const missing = a.keyword_match.missing.join(", ");
+    const bullets = a.bullet_suggestions
+      .map(
+        (b, i) =>
+          `- ${i + 1}.\n  Original: ${b.original}\n  Improved: ${b.improved}` +
+          (b.rationale ? `\n  Rationale: ${b.rationale}` : "")
+      )
+      .join("\n\n");
+    const missingSections = a.missing_sections.map((s) => `- ${s}`).join("\n");
+    const tips = a.formatting_tips.map((t) => `- ${t}`).join("\n");
+    return `# Resume Analysis\n\n**ATS Score:** ${a.ats_score}\n\n## Keyword Match\n**Matched:** ${matched}\n\n**Missing:** ${missing}\n\n## Bullet Suggestions\n${bullets}\n\n## Missing Sections\n${missingSections}\n\n## Formatting Tips\n${tips}\n`;
+  };
+
+  const downloadMarkdown = () => {
+    if (!analysis) return;
+    const md = generateAnalysisMarkdown(analysis);
+    const blob = new Blob([md], { type: "text/markdown" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `analysis-${Date.now()}.md`;
+    document.body.appendChild(a);
+    a.click();
+    URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+    setShowDownloadMenu(false);
   };
 
   const getScoreColor = (score: number) => {
@@ -273,6 +383,7 @@ export default function AnalyzePage() {
                       size="sm"
                       variant="ghost"
                       onClick={() => copyToClipboard(keyword)}
+                      className="hover:bg-teal-50 hover:text-teal-700 ring-1 ring-transparent hover:ring-teal-200 rounded transition-colors"
                     >
                       <Copy className="w-3 h-3" />
                     </Button>
@@ -303,6 +414,7 @@ export default function AnalyzePage() {
                       size="sm"
                       variant="ghost"
                       onClick={() => copyToClipboard(keyword)}
+                      className="hover:bg-teal-50 hover:text-teal-700 ring-1 ring-transparent hover:ring-teal-200 rounded transition-colors"
                     >
                       <Copy className="w-3 h-3" />
                     </Button>
@@ -406,19 +518,50 @@ export default function AnalyzePage() {
         <div className="flex flex-col sm:flex-row gap-4 justify-center">
           <Button
             size="lg"
-            className="bg-teal-600 hover:bg-teal-700 text-white px-8 py-3"
+            className={`bg-teal-600 hover:bg-teal-700 text-white px-8 py-3 ${
+              action === "sample" ? "opacity-70 cursor-not-allowed" : ""
+            }`}
+            onClick={handleRewriteFull}
           >
-            <Sparkles className="w-5 h-5 mr-2" />
-            Rewrite Full Resume
+            {isRewriting ? (
+              <>
+                <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                Rewriting...
+              </>
+            ) : (
+              <>
+                <Sparkles className="w-5 h-5 mr-2" />
+                Rewrite Full Resume
+              </>
+            )}
           </Button>
-          <Button
-            variant="outline"
-            size="lg"
-            className="border-teal-600 text-teal-600 hover:bg-teal-50 px-8 py-3"
-          >
-            <Download className="w-5 h-5 mr-2" />
-            Download Analysis
-          </Button>
+          <div className="relative" ref={downloadMenuRef}>
+            <Button
+              variant="outline"
+              size="lg"
+              className="border-teal-600 text-teal-600 hover:bg-teal-50 px-8 py-3"
+              onClick={() => setShowDownloadMenu((s) => !s)}
+            >
+              <Download className="w-5 h-5 mr-2" />
+              Download Analysis
+            </Button>
+            {showDownloadMenu && (
+              <div className="absolute right-0 mt-2 w-44 bg-white border border-gray-200 rounded-md shadow-lg z-50 p-1">
+                <button
+                  className="w-full text-left px-3 py-2 text-sm rounded hover:bg-teal-50 hover:text-teal-700"
+                  onClick={downloadJson}
+                >
+                  JSON (.json)
+                </button>
+                <button
+                  className="w-full text-left px-3 py-2 text-sm rounded hover:bg-teal-50 hover:text-teal-700"
+                  onClick={downloadMarkdown}
+                >
+                  Markdown (.md)
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </AppShell>

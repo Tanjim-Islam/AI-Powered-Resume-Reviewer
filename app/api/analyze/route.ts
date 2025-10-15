@@ -84,7 +84,12 @@ ${jobDescription || "N/A"}`;
       userPrompt
     );
 
-    return NextResponse.json(analysis);
+    // Include original resume text and job description for downstream rewrite flow
+    return NextResponse.json({
+      ...analysis,
+      original_resume_text: parsedResume.text,
+      job_description: jobDescription || "",
+    });
   } catch (error) {
     console.error("Analysis error:", error);
 

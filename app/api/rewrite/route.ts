@@ -5,7 +5,11 @@ import { RewriteResponseSchema } from "@/lib/schemas";
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { resumeText, jobDescription } = body;
+    const { resumeText, jobDescription, analysis } = body as {
+      resumeText: string;
+      jobDescription?: string;
+      analysis?: any;
+    };
 
     if (!resumeText || resumeText.length < 200) {
       return NextResponse.json(
@@ -19,6 +23,8 @@ export async function POST(request: NextRequest) {
     const systemPrompt = `You are a resume rewriter that produces recruiter friendly content with measurable impact, strong action verbs, and concise bullets. 
 
 Rewrite the resume below into a clean structure with these sections: Header, Summary, Skills grouped, Experience, Projects, Education, Certifications if any. Tailor wording to the job description if provided. Keep truthfulness, do not invent employers or degrees. Add metrics only when safely inferable from the text. Use crisp language.
+
+If analysis data is provided, thoughtfully incorporate its insights: prefer the suggested improved bullets when aligned with the resume facts, address missing sections when information exists, and reflect formatting tips in the markdown output. Do not fabricate details to satisfy suggestions.
 
 You must return a JSON object with exactly two fields:
 1. "markdown": A string containing the rewritten resume in Markdown format with clear headings and bullet lists
@@ -42,7 +48,10 @@ The JSON structure must match this schema:
 ${resumeText}
 
 Job Description:
-${jobDescription || "N/A"}`;
+${jobDescription || "N/A"}
+
+Analysis (may be empty):
+${analysis ? JSON.stringify(analysis) : "{}"}`;
 
     const rewrite = await llmProvider.generateJson(
       RewriteResponseSchema,
