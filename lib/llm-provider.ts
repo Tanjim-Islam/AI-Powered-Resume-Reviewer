@@ -20,27 +20,36 @@ class LLMProvider {
       modelDefault:
         process.env.MODEL_DEFAULT || "meta-llama/llama-3.1-70b-instruct",
       geminiApiKey: process.env.GEMINI_API_KEY,
-      geminiModel: process.env.GEMINI_MODEL || "gemini-1.0-pro",
+      geminiModel: process.env.GEMINI_MODEL || "gemini-1.5-pro",
       geminiOnly: process.env.GEMINI_ONLY === "true",
     };
   }
 
   private getProvider(): "openrouter" | "gemini" | null {
+    console.log("LLM Provider Selection:");
+    console.log("- Gemini Only:", this.config.geminiOnly);
+    console.log("- Has OpenRouter Key:", !!this.config.openrouterApiKey);
+    console.log("- Has Gemini Key:", !!this.config.geminiApiKey);
+
     // If Gemini-only is set and we have a key, try Gemini first
     if (this.config.geminiOnly && this.config.geminiApiKey) {
+      console.log("Using Gemini (forced)");
       return "gemini";
     }
 
     // Otherwise, prefer OpenRouter if available
     if (this.config.openrouterApiKey) {
+      console.log("Using OpenRouter");
       return "openrouter";
     }
 
     // Fall back to Gemini if OpenRouter isn't available but Gemini is
     if (this.config.geminiApiKey) {
+      console.log("Using Gemini (fallback)");
       return "gemini";
     }
 
+    console.log("No LLM provider available");
     return null;
   }
 
@@ -116,7 +125,11 @@ class LLMProvider {
           provider === "gemini" &&
           this.config.openrouterApiKey &&
           error instanceof Error &&
-          error.message.includes("Invalid request to Gemini API")
+          (error.message.includes("Invalid request to Gemini API") ||
+            error.message.includes(
+              "Gemini API service is temporarily unavailable"
+            ) ||
+            error.message.includes("503"))
         ) {
           console.log("Gemini failed, trying OpenRouter as fallback...");
           provider = "openrouter"; // Switch to OpenRouter for next attempt

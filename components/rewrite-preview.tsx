@@ -1,22 +1,13 @@
 "use client";
 
 import { useState } from "react";
+import ReactMarkdown from "react-markdown";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
-import {
-  Download,
-  Copy,
-  Eye,
-  Edit3,
-  FileText,
-  Sparkles,
-  Loader2,
-  CheckCircle,
-} from "lucide-react";
+import { Download, Copy, Eye, Edit3, FileText, Loader2 } from "lucide-react";
 import { RewriteResponse } from "@/lib/schemas";
 
 interface RewritePreviewProps {
@@ -25,70 +16,175 @@ interface RewritePreviewProps {
   isExporting: boolean;
 }
 
+type EditableData = RewriteResponse["json"];
+
 export function RewritePreview({
   rewriteData,
   onExport,
   isExporting,
 }: RewritePreviewProps) {
   const [activeTab, setActiveTab] = useState("markdown");
-  const [editableData, setEditableData] = useState(rewriteData.json);
-  const [copiedItems, setCopiedItems] = useState<Set<string>>(new Set());
+  const [editableData, setEditableData] = useState<EditableData>(
+    rewriteData.json
+  );
 
-  const copyToClipboard = async (text: string, itemId: string) => {
+  const copyToClipboard = async (text: string) => {
     try {
       await navigator.clipboard.writeText(text);
-      setCopiedItems((prev) => new Set(prev).add(itemId));
-      setTimeout(() => {
-        setCopiedItems((prev) => {
-          const newSet = new Set(prev);
-          newSet.delete(itemId);
-          return newSet;
-        });
-      }, 2000);
     } catch (error) {
       console.error("Failed to copy:", error);
     }
   };
 
-  const updateField = (section: string, field: string, value: string) => {
+  const updateField = (
+    section: keyof EditableData,
+    field: string,
+    value: string
+  ) => {
     setEditableData((prev) => ({
       ...prev,
       [section]: {
-        ...prev[section as keyof typeof prev],
+        ...(prev[section] as Record<string, unknown>),
         [field]: value,
       },
     }));
   };
 
   const updateArrayField = (
-    section: string,
+    section: keyof EditableData,
     index: number,
     field: string,
     value: string
   ) => {
-    setEditableData((prev) => ({
-      ...prev,
-      [section]: prev[section as keyof typeof prev].map(
-        (item: Record<string, unknown>, i: number) =>
-          i === index ? { ...item, [field]: value } : item
-      ),
-    }));
+    setEditableData((prev) => {
+      const currentSection = prev[section];
+      if (Array.isArray(currentSection) && currentSection.length > 0) {
+        // Type guard to ensure we're dealing with objects, not strings
+        if (
+          typeof currentSection[0] === "object" &&
+          currentSection[0] !== null
+        ) {
+          const arr = currentSection as Array<Record<string, unknown>>;
+          return {
+            ...prev,
+            [section]: arr.map((item, i) =>
+              i === index ? { ...item, [field]: value } : item
+            ) as typeof currentSection,
+          };
+        }
+      }
+      return prev;
+    });
   };
 
-  const addArrayItem = (section: string, newItem: Record<string, unknown>) => {
-    setEditableData((prev) => ({
-      ...prev,
-      [section]: [...prev[section as keyof typeof prev], newItem],
-    }));
+  const updateNestedArrayField = (
+    section: keyof EditableData,
+    arrayIndex: number,
+    field: string,
+    itemIndex: number,
+    value: string
+  ) => {
+    setEditableData((prev) => {
+      const currentSection = prev[section];
+      if (Array.isArray(currentSection) && currentSection.length > 0) {
+        if (
+          typeof currentSection[0] === "object" &&
+          currentSection[0] !== null
+        ) {
+          const arr = currentSection as Array<Record<string, unknown>>;
+          return {
+            ...prev,
+            [section]: arr.map((item, i) =>
+              i === arrayIndex
+                ? {
+                    ...item,
+                    [field]: (item[field] as string[]).map((str, j) =>
+                      j === itemIndex ? value : str
+                    ),
+                  }
+                : item
+            ) as typeof currentSection,
+          };
+        }
+      }
+      return prev;
+    });
   };
 
-  const removeArrayItem = (section: string, index: number) => {
-    setEditableData((prev) => ({
-      ...prev,
-      [section]: prev[section as keyof typeof prev].filter(
-        (_: Record<string, unknown>, i: number) => i !== index
-      ),
-    }));
+  const updateSkillsArrayItem = (
+    section: keyof EditableData,
+    arrayIndex: number,
+    itemIndex: number,
+    value: string
+  ) => {
+    setEditableData((prev) => {
+      const currentSection = prev[section];
+      if (Array.isArray(currentSection) && currentSection.length > 0) {
+        if (
+          typeof currentSection[0] === "object" &&
+          currentSection[0] !== null
+        ) {
+          const arr = currentSection as Array<Record<string, unknown>>;
+          return {
+            ...prev,
+            [section]: arr.map((item, i) =>
+              i === arrayIndex
+                ? {
+                    ...item,
+                    items: (item.items as string[]).map((str, j) =>
+                      j === itemIndex ? value : str
+                    ),
+                  }
+                : item
+            ) as typeof currentSection,
+          };
+        }
+      }
+      return prev;
+    });
+  };
+
+  const addArrayItem = (
+    section: keyof EditableData,
+    newItem: Record<string, unknown>
+  ) => {
+    setEditableData((prev) => {
+      const currentSection = prev[section];
+      if (Array.isArray(currentSection) && currentSection.length > 0) {
+        if (
+          typeof currentSection[0] === "object" &&
+          currentSection[0] !== null
+        ) {
+          const arr = currentSection as Array<Record<string, unknown>>;
+          return {
+            ...prev,
+            [section]: [...arr, newItem] as unknown as typeof currentSection,
+          };
+        }
+      }
+      return prev;
+    });
+  };
+
+  const removeArrayItem = (section: keyof EditableData, index: number) => {
+    setEditableData((prev) => {
+      const currentSection = prev[section];
+      if (Array.isArray(currentSection) && currentSection.length > 0) {
+        if (
+          typeof currentSection[0] === "object" &&
+          currentSection[0] !== null
+        ) {
+          const arr = currentSection as Array<Record<string, unknown>>;
+          return {
+            ...prev,
+            [section]: arr.filter(
+              (_, i) => i !== index
+            ) as unknown as typeof currentSection,
+          };
+        }
+      }
+      return prev;
+    });
   };
 
   return (
@@ -123,18 +219,16 @@ export function RewritePreview({
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() =>
-                  copyToClipboard(rewriteData.markdown, "markdown")
-                }
+                onClick={() => copyToClipboard(rewriteData.markdown)}
               >
                 <Copy className="w-4 h-4 mr-2" />
                 Copy Markdown
               </Button>
             </div>
             <div className="prose max-w-none">
-              <pre className="whitespace-pre-wrap text-sm text-gray-700 bg-gray-50 p-4 rounded-lg overflow-x-auto">
-                {rewriteData.markdown}
-              </pre>
+              <div className="bg-gray-50 p-4 rounded-lg overflow-x-auto text-sm text-gray-700">
+                <ReactMarkdown>{rewriteData.markdown}</ReactMarkdown>
+              </div>
             </div>
           </Card>
         </TabsContent>
@@ -236,13 +330,11 @@ export function RewritePreview({
                         <Input
                           value={item}
                           onChange={(e) => {
-                            const newItems = [...skillGroup.items];
-                            newItems[itemIndex] = e.target.value;
-                            updateArrayField(
+                            updateSkillsArrayItem(
                               "skills",
                               index,
-                              "items",
-                              newItems.join(", ")
+                              itemIndex,
+                              e.target.value
                             );
                           }}
                           className="w-auto min-w-0"
@@ -353,13 +445,12 @@ export function RewritePreview({
                           <Input
                             value={bullet}
                             onChange={(e) => {
-                              const newBullets = [...exp.bullets];
-                              newBullets[bulletIndex] = e.target.value;
-                              updateArrayField(
+                              updateNestedArrayField(
                                 "experience",
                                 index,
                                 "bullets",
-                                newBullets
+                                bulletIndex,
+                                e.target.value
                               );
                             }}
                           />
@@ -370,12 +461,20 @@ export function RewritePreview({
                               const newBullets = exp.bullets.filter(
                                 (_, i) => i !== bulletIndex
                               );
-                              updateArrayField(
-                                "experience",
-                                index,
-                                "bullets",
-                                newBullets
-                              );
+                              setEditableData((prev) => {
+                                const currentSection = prev.experience;
+                                if (Array.isArray(currentSection)) {
+                                  return {
+                                    ...prev,
+                                    experience: currentSection.map((item, i) =>
+                                      i === index
+                                        ? { ...item, bullets: newBullets }
+                                        : item
+                                    ),
+                                  };
+                                }
+                                return prev;
+                              });
                             }}
                             className="text-red-500 hover:text-red-700"
                           >
@@ -388,12 +487,20 @@ export function RewritePreview({
                         size="sm"
                         onClick={() => {
                           const newBullets = [...exp.bullets, ""];
-                          updateArrayField(
-                            "experience",
-                            index,
-                            "bullets",
-                            newBullets
-                          );
+                          setEditableData((prev) => {
+                            const currentSection = prev.experience;
+                            if (Array.isArray(currentSection)) {
+                              return {
+                                ...prev,
+                                experience: currentSection.map((item, i) =>
+                                  i === index
+                                    ? { ...item, bullets: newBullets }
+                                    : item
+                                ),
+                              };
+                            }
+                            return prev;
+                          });
                         }}
                       >
                         Add Bullet Point
@@ -487,13 +594,12 @@ export function RewritePreview({
                           <Input
                             value={bullet}
                             onChange={(e) => {
-                              const newBullets = [...project.bullets];
-                              newBullets[bulletIndex] = e.target.value;
-                              updateArrayField(
+                              updateNestedArrayField(
                                 "projects",
                                 index,
                                 "bullets",
-                                newBullets
+                                bulletIndex,
+                                e.target.value
                               );
                             }}
                           />
@@ -504,12 +610,20 @@ export function RewritePreview({
                               const newBullets = project.bullets.filter(
                                 (_, i) => i !== bulletIndex
                               );
-                              updateArrayField(
-                                "projects",
-                                index,
-                                "bullets",
-                                newBullets
-                              );
+                              setEditableData((prev) => {
+                                const currentSection = prev.projects;
+                                if (Array.isArray(currentSection)) {
+                                  return {
+                                    ...prev,
+                                    projects: currentSection.map((item, i) =>
+                                      i === index
+                                        ? { ...item, bullets: newBullets }
+                                        : item
+                                    ),
+                                  };
+                                }
+                                return prev;
+                              });
                             }}
                             className="text-red-500 hover:text-red-700"
                           >
@@ -522,12 +636,20 @@ export function RewritePreview({
                         size="sm"
                         onClick={() => {
                           const newBullets = [...project.bullets, ""];
-                          updateArrayField(
-                            "projects",
-                            index,
-                            "bullets",
-                            newBullets
-                          );
+                          setEditableData((prev) => {
+                            const currentSection = prev.projects;
+                            if (Array.isArray(currentSection)) {
+                              return {
+                                ...prev,
+                                projects: currentSection.map((item, i) =>
+                                  i === index
+                                    ? { ...item, bullets: newBullets }
+                                    : item
+                                ),
+                              };
+                            }
+                            return prev;
+                          });
                         }}
                       >
                         Add Bullet Point

@@ -8,7 +8,7 @@ export async function POST(request: NextRequest) {
     const { resumeText, jobDescription, analysis } = body as {
       resumeText: string;
       jobDescription?: string;
-      analysis?: any;
+      analysis?: Record<string, unknown>;
     };
 
     if (!resumeText || resumeText.length < 200) {
