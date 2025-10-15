@@ -62,8 +62,10 @@ export function RewritePreview({
   const generateMarkdown = (data: EditableData): string => {
     let markdown = "";
 
-    // Header
-    markdown += `# ${data.header.name}\n\n`;
+    // Header - centered with proper spacing
+    markdown += `${data.header.name}\n${"=".repeat(
+      data.header.name.length
+    )}\n\n`;
 
     if (data.header.title) {
       markdown += `**${data.header.title}**\n\n`;
@@ -85,14 +87,17 @@ export function RewritePreview({
       markdown += `${contacts.join(" | ")}\n\n`;
     }
 
+    markdown += "---\n\n";
+
     // Summary
-    markdown += `## Summary\n\n${data.summary}\n\n`;
+    markdown += `## Summary\n\n${data.summary}\n\n\n`;
 
     // Skills
     markdown += `## Skills\n\n`;
     data.skills.forEach((skillGroup) => {
       markdown += `**${skillGroup.group}:** ${skillGroup.items.join(", ")}\n\n`;
     });
+    markdown += "\n";
 
     // Experience
     markdown += `## Experience\n\n`;
@@ -102,7 +107,7 @@ export function RewritePreview({
       exp.bullets.forEach((bullet) => {
         markdown += `- ${bullet}\n`;
       });
-      markdown += "\n";
+      markdown += "\n\n";
     });
 
     // Projects
@@ -114,7 +119,7 @@ export function RewritePreview({
         project.bullets.forEach((bullet) => {
           markdown += `- ${bullet}\n`;
         });
-        markdown += "\n";
+        markdown += "\n\n";
       });
     }
 
@@ -130,7 +135,7 @@ export function RewritePreview({
       }
       markdown += "\n";
     });
-    markdown += "\n";
+    markdown += "\n\n";
 
     // Certifications
     if (data.certifications && data.certifications.length > 0) {
@@ -138,7 +143,7 @@ export function RewritePreview({
       data.certifications.forEach((cert) => {
         markdown += `- ${cert}\n`;
       });
-      markdown += "\n";
+      markdown += "\n\n";
     }
 
     return markdown.trim();
