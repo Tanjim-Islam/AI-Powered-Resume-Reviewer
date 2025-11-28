@@ -109,7 +109,7 @@ export const counterAnimation = (
       ease: "power2.out",
       snap: { textContent: 1 },
       onUpdate: function () {
-        element.textContent = Math.round(this.targets()[0].textContent);
+        element.textContent = String(Math.round(this.targets()[0].textContent));
       },
     }
   );
