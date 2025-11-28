@@ -53,7 +53,7 @@ export default function Home() {
         {/* Hero Section */}
         <div className="text-center mb-12">
           <h1
-            className="text-5xl font-bold text-gray-800 mb-6"
+            className="text-5xl font-bold text-gray-800 mb-6 font-mono"
             data-animate="textReveal"
             data-delay="0.2"
           >
