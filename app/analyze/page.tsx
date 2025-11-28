@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
@@ -33,7 +33,7 @@ type AnalyzeWithSource = AnalyzeResponse & {
   job_description?: string;
 };
 
-export default function AnalyzePage() {
+function AnalyzePageContent() {
   const [analysis, setAnalysis] = useState<AnalyzeWithSource | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isRewriting, setIsRewriting] = useState(false);
@@ -565,5 +565,24 @@ export default function AnalyzePage() {
         </div>
       </div>
     </AppShell>
+  );
+}
+
+export default function AnalyzePage() {
+  return (
+    <Suspense
+      fallback={
+        <AppShell>
+          <div className="container mx-auto px-4 py-12">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-teal-600 mx-auto mb-4"></div>
+              <p className="text-gray-600">Loading analysis...</p>
+            </div>
+          </div>
+        </AppShell>
+      }
+    >
+      <AnalyzePageContent />
+    </Suspense>
   );
 }
