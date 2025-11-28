@@ -27,7 +27,7 @@ export async function parseResumeFile(file: File): Promise<ParsedResume> {
       const mammoth = await import("mammoth");
       const arrayBuffer = await file.arrayBuffer();
       const result = await mammoth.default.extractRawText({
-        buffer: arrayBuffer,
+        buffer: Buffer.from(arrayBuffer),
       });
 
       return {
