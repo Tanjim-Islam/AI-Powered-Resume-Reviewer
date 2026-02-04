@@ -16,11 +16,11 @@ export async function parseResumeFile(file: File): Promise<ParsedResume> {
     }
 
     if (fileType === "application/pdf") {
-      const pdfModule = await import("pdf-parse");
+      const pdfModule = (await import("pdf-parse")) as unknown;
       const pdfFn =
-        "pdf" in pdfModule
-          ? pdfModule.pdf
-          : pdfModule.default ?? pdfModule;
+        (pdfModule as { pdf?: (data: Buffer) => Promise<unknown> }).pdf ??
+        (pdfModule as { default?: (data: Buffer) => Promise<unknown> }).default ??
+        (pdfModule as (data: Buffer) => Promise<unknown>);
       const arrayBuffer = await file.arrayBuffer();
       const pdfBuffer = Buffer.from(arrayBuffer);
       const data = await (pdfFn as (
