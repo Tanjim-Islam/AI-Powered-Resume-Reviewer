@@ -15,21 +15,15 @@ export function AppShell({ children, className = "" }: AppShellProps) {
       <header className="w-full border-b border-white/20 backdrop-blur-sm bg-white/10 glass-navbar">
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-2">
+            <Link href="/" className="flex items-center space-x-2">
               <div className="w-8 h-8 bg-teal-500 rounded-lg flex items-center justify-center">
                 <span className="text-white font-bold text-sm">RR</span>
               </div>
               <h1 className="text-xl font-bold text-gray-800">
                 Resume Reviewer
               </h1>
-            </div>
+            </Link>
             <nav className="hidden md:flex items-center space-x-6">
-              <Link
-                href="/"
-                className="text-gray-600 hover:text-teal-600 transition-colors"
-              >
-                Home
-              </Link>
               <Link
                 href="/about"
                 className="text-gray-600 hover:text-teal-600 transition-colors"

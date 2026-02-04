@@ -371,11 +371,11 @@ function AnalyzePageContent() {
                 {analysis.keyword_match.matched.map((keyword, index) => (
                   <div
                     key={index}
-                    className="flex items-center justify-between bg-green-50 p-2 rounded"
+                    className="flex items-start gap-2 bg-green-50 p-2 rounded"
                   >
                     <Badge
                       variant="secondary"
-                      className="bg-green-100 text-green-800"
+                      className="bg-green-100 text-green-800 whitespace-normal break-words text-left flex-1 min-w-0"
                     >
                       {keyword}
                     </Badge>
@@ -383,7 +383,7 @@ function AnalyzePageContent() {
                       size="sm"
                       variant="ghost"
                       onClick={() => copyToClipboard(keyword)}
-                      className="hover:bg-teal-50 hover:text-teal-700 ring-1 ring-transparent hover:ring-teal-200 rounded transition-colors"
+                      className="ml-auto hover:bg-teal-50 hover:text-teal-700 ring-1 ring-transparent hover:ring-teal-200 rounded transition-colors"
                     >
                       <Copy className="w-3 h-3" />
                     </Button>
@@ -402,11 +402,11 @@ function AnalyzePageContent() {
                 {analysis.keyword_match.missing.map((keyword, index) => (
                   <div
                     key={index}
-                    className="flex items-center justify-between bg-red-50 p-2 rounded"
+                    className="flex items-start gap-2 bg-red-50 p-2 rounded"
                   >
                     <Badge
                       variant="secondary"
-                      className="bg-red-100 text-red-800"
+                      className="bg-red-100 text-red-800 whitespace-normal break-words text-left flex-1 min-w-0"
                     >
                       {keyword}
                     </Badge>
@@ -414,7 +414,7 @@ function AnalyzePageContent() {
                       size="sm"
                       variant="ghost"
                       onClick={() => copyToClipboard(keyword)}
-                      className="hover:bg-teal-50 hover:text-teal-700 ring-1 ring-transparent hover:ring-teal-200 rounded transition-colors"
+                      className="ml-auto hover:bg-teal-50 hover:text-teal-700 ring-1 ring-transparent hover:ring-teal-200 rounded transition-colors"
                     >
                       <Copy className="w-3 h-3" />
                     </Button>
