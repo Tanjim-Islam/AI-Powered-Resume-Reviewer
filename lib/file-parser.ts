@@ -4,19 +4,32 @@ export interface ParsedResume {
   fileType: string;
 }
 
+const MAX_RESUME_BYTES = 4 * 1024 * 1024;
+
 export async function parseResumeFile(file: File): Promise<ParsedResume> {
   const fileName = file.name;
   const fileType = file.type;
 
   try {
+    if (file.size > MAX_RESUME_BYTES) {
+      throw new Error("File size must be less than 4MB.");
+    }
+
     if (fileType === "application/pdf") {
-      const { pdf } = await import("pdf-parse");
+      const pdfModule = await import("pdf-parse");
+      const pdfFn =
+        "pdf" in pdfModule
+          ? pdfModule.pdf
+          : pdfModule.default ?? pdfModule;
       const arrayBuffer = await file.arrayBuffer();
       const pdfBuffer = Buffer.from(arrayBuffer);
-      const data = await pdf(pdfBuffer);
+      const data = await (pdfFn as (
+        data: Buffer
+      ) => Promise<{ text?: string } | string>)(pdfBuffer);
+      const text = typeof data === "string" ? data : data.text;
 
       return {
-        text: data.text.trim(),
+        text: text?.trim() || "",
         fileName,
         fileType,
       };
@@ -42,6 +55,15 @@ export async function parseResumeFile(file: File): Promise<ParsedResume> {
     }
   } catch (error) {
     console.error("File parsing error:", error);
+    if (error instanceof Error) {
+      if (
+        error.message === "File size must be less than 4MB." ||
+        error.message.startsWith("Unsupported file type")
+      ) {
+        throw error;
+      }
+    }
+
     throw new Error(
       "Failed to parse the file. Please try uploading a different file or paste the text instead."
     );

@@ -3,6 +3,8 @@ import { Document, Packer, Paragraph, TextRun, HeadingLevel } from "docx";
 import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
 import { ExportRequestSchema, RewriteResponse } from "@/lib/schemas";
 
+export const runtime = "nodejs";
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();

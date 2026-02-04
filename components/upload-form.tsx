@@ -99,8 +99,8 @@ export function UploadForm({ onAnalyze, isLoading }: UploadFormProps) {
       return false;
     }
 
-    if (file.size > 5 * 1024 * 1024) {
-      alert("File size must be less than 5MB.");
+    if (file.size > 4 * 1024 * 1024) {
+      alert("File size must be less than 4MB.");
       return false;
     }
 
@@ -204,7 +204,7 @@ export function UploadForm({ onAnalyze, isLoading }: UploadFormProps) {
                   </button>
                 </div>
                 <p className="text-sm text-gray-500">
-                  Supports PDF and DOCX files up to 5MB
+                  Supports PDF and DOCX files up to 4MB
                 </p>
               </div>
             )}

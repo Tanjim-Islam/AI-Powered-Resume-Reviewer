@@ -3,6 +3,8 @@ import { parseResumeFile, validateJobDescription } from "@/lib/file-parser";
 import { llmProvider } from "@/lib/llm-provider";
 import { AnalyzeResponseSchema } from "@/lib/schemas";
 
+export const runtime = "nodejs";
+
 export async function POST(request: NextRequest) {
   try {
     const formData = await request.formData();
@@ -94,7 +96,16 @@ ${jobDescription || "N/A"}`;
     console.error("Analysis error:", error);
 
     if (error instanceof Error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      const message = error.message;
+      if (
+        message.startsWith("Unsupported file type") ||
+        message.startsWith("File size must be less than") ||
+        message.startsWith("Failed to parse the file")
+      ) {
+        return NextResponse.json({ error: message }, { status: 400 });
+      }
+
+      return NextResponse.json({ error: message }, { status: 500 });
     }
 
     return NextResponse.json(

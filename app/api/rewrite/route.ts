@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { llmProvider } from "@/lib/llm-provider";
 import { RewriteResponseSchema } from "@/lib/schemas";
 
+export const runtime = "nodejs";
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
