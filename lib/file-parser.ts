@@ -16,7 +16,8 @@ export async function parseResumeFile(file: File): Promise<ParsedResume> {
     }
 
     if (fileType === "application/pdf") {
-      const pdfModule = (await import("pdf-parse")) as unknown;
+      // Use the core parser directly to avoid pdf-parse's debug self-test in its root entry.
+      const pdfModule = (await import("pdf-parse/lib/pdf-parse.js")) as unknown;
       const pdfFn =
         (pdfModule as { pdf?: (data: Buffer) => Promise<unknown> }).pdf ??
         (pdfModule as { default?: (data: Buffer) => Promise<unknown> }).default ??
