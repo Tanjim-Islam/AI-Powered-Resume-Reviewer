@@ -367,7 +367,7 @@ function AnalyzePageContent() {
                 <CheckCircle className="w-4 h-4 mr-2" />
                 Matched Keywords ({analysis.keyword_match.matched.length})
               </h4>
-              <div className="space-y-2">
+              <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
                 {analysis.keyword_match.matched.map((keyword, index) => (
                   <div
                     key={index}
@@ -398,7 +398,7 @@ function AnalyzePageContent() {
                 <XCircle className="w-4 h-4 mr-2" />
                 Missing Keywords ({analysis.keyword_match.missing.length})
               </h4>
-              <div className="space-y-2">
+              <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
                 {analysis.keyword_match.missing.map((keyword, index) => (
                   <div
                     key={index}
