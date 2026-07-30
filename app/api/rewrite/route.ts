@@ -140,6 +140,8 @@ The json object must have this shape:
   "interests": ["string"]
 }
 
+Put the LinkedIn profile only in "linkedin" and the personal website only in "portfolio". Use "links" only for additional, distinct URLs such as GitHub, Behance, or a publication profile. Never repeat the same URL in multiple header fields.
+
 Use empty strings or empty arrays for missing information.`;
 
     const userPrompt = `Resume:

@@ -1,4 +1,8 @@
 import type { ResumeData, ResumeTemplateId } from "@/lib/schemas";
+import {
+  getResumeContactItems,
+  type ResumeContactItem,
+} from "@/lib/resume-contact";
 
 export type ResumeTemplateCategory =
   | "general"
@@ -362,7 +366,28 @@ function nonEmpty(values: Array<string | null | undefined>): string[] {
   return values.map((value) => (value ?? "").trim()).filter(Boolean);
 }
 
+function escapeLatexHref(value: string): string {
+  return encodeURI(value)
+    .replace(/%/g, "\\%")
+    .replace(/#/g, "\\#")
+    .replace(/_/g, "\\_")
+    .replace(/&/g, "\\&");
+}
+
+function latexContactItem(item: ResumeContactItem): string {
+  const text = escapeLatex(item.text);
+  if (!item.href) return text;
+
+  return `\\href{${escapeLatexHref(item.href)}}{\\textcolor{ResumeLink}{${text}}}`;
+}
+
 function contactLine(data: ResumeData): string {
+  return getResumeContactItems(data.header)
+    .map(latexContactItem)
+    .join(" \\enspace $\\vert$ \\enspace ");
+}
+
+function legacyContactValues(data: ResumeData): string[] {
   return nonEmpty([
     data.header.location,
     data.header.phone,
@@ -370,9 +395,101 @@ function contactLine(data: ResumeData): string {
     data.header.linkedin,
     data.header.portfolio,
     ...(data.header.links ?? []),
+  ]).map(escapeLatex);
+}
+
+function legacyContactLine(data: ResumeData): string {
+  return legacyContactValues(data).join(
+    " \\enspace $\\vert$ \\enspace "
+  );
+}
+
+function legacyStackedContact(data: ResumeData): string {
+  return legacyContactValues(data).join("\\\\[2pt]\n");
+}
+
+function boltachContactEntries(data: ResumeData): string {
+  const contactItems = getResumeContactItems(data.header);
+  const personalEntries = contactItems.filter(
+    (item) =>
+      item.kind === "location" ||
+      item.kind === "phone" ||
+      item.kind === "email"
+  );
+  const onlineEntries = contactItems.filter(
+    (item) =>
+      item.kind === "linkedin" ||
+      item.kind === "portfolio" ||
+      item.kind === "link"
+  );
+  const personalRows = personalEntries
+    .map((item) => {
+      const label =
+        item.kind === "location"
+          ? "Location"
+          : item.kind === "phone"
+            ? "Phone"
+            : "Email";
+      return `\\PersonalEntry{${label}}{${latexContactItem(item)}}`;
+    })
+    .join("\n");
+  const onlineRow = onlineEntries.length
+    ? `\\PersonalEntry{Online}{${onlineEntries
+        .map(latexContactItem)
+        .join(" \\enspace $\\vert$ \\enspace ")}}`
+    : "";
+
+  return [personalRows, onlineRow].filter(Boolean).join("\n");
+}
+
+function legacyBoltachContactEntries(data: ResumeData): string {
+  return nonEmpty([
+    data.header.location,
+    data.header.phone,
+    data.header.email,
+    data.header.linkedin,
+    data.header.portfolio,
   ])
-    .map(escapeLatex)
-    .join(" \\enspace $\\vert$ \\enspace ");
+    .map(
+      (value, index) =>
+        `\\PersonalEntry{${
+          ["Location", "Phone", "Email", "LinkedIn", "Portfolio"][index] ??
+          "Contact"
+        }}{${escapeLatex(value)}}`
+    )
+    .join("\n");
+}
+
+export function upgradeResumeLatexContacts(
+  source: string,
+  data: ResumeData
+): string {
+  if (!source) return source;
+
+  let upgraded = source;
+  const replacements: Array<[string, string]> = [
+    [legacyContactLine(data), contactLine(data)],
+    [legacyStackedContact(data), stackedContact(data)],
+    [legacyBoltachContactEntries(data), boltachContactEntries(data)],
+  ];
+
+  for (const [legacy, current] of replacements) {
+    if (legacy && legacy !== current && upgraded.includes(legacy)) {
+      upgraded = upgraded.replace(legacy, current);
+    }
+  }
+
+  if (
+    upgraded !== source &&
+    !upgraded.includes("\\definecolor{ResumeLink}")
+  ) {
+    upgraded = upgraded.replace(
+      "\\usepackage[hidelinks]{hyperref}",
+      "\\usepackage[hidelinks]{hyperref}\n\\definecolor{ResumeLink}{HTML}{1D4ED8}"
+    );
+  }
+
+  return upgraded;
 }
 
 function attribution(template: ResumeTemplate): string {
@@ -405,6 +522,7 @@ function basePreamble(
 \\usepackage{array}
 \\usepackage{graphicx}
 \\usepackage[hidelinks]{hyperref}
+\\definecolor{ResumeLink}{HTML}{1D4ED8}
 \\setlength{\\parindent}{0pt}
 \\setlength{\\parskip}{0pt}
 \\setlength{\\tabcolsep}{0pt}
@@ -601,15 +719,8 @@ ${content}`;
 }
 
 function stackedContact(data: ResumeData): string {
-  return nonEmpty([
-    data.header.location,
-    data.header.phone,
-    data.header.email,
-    data.header.linkedin,
-    data.header.portfolio,
-    ...(data.header.links ?? []),
-  ])
-    .map(escapeLatex)
+  return getResumeContactItems(data.header)
+    .map(latexContactItem)
     .join("\\\\[2pt]\n");
 }
 
@@ -1176,14 +1287,6 @@ ${simpleList(data.certifications)}` : ""}
 }
 
 function renderBoltach(template: ResumeTemplate, data: ResumeData): string {
-  const personalEntries = nonEmpty([
-    data.header.location,
-    data.header.phone,
-    data.header.email,
-    data.header.linkedin,
-    data.header.portfolio,
-  ]);
-
   return `${basePreamble(template, {
     paper: "a4paper",
     fontSize: "11pt",
@@ -1195,12 +1298,7 @@ function renderBoltach(template: ResumeTemplate, data: ResumeData): string {
 \\begin{document}
 \\hfill {\\Huge\\bfseries ${escapeLatex(data.header.name)}}\\\\[-1pt]
 \\hfill {\\large\\itshape ${escapeLatex(data.header.title)}}\\\\[8pt]
-${personalEntries
-  .map(
-    (value, index) =>
-      `\\PersonalEntry{${["Location", "Phone", "Email", "LinkedIn", "Portfolio"][index] ?? "Contact"}}{${escapeLatex(value)}}`
-  )
-  .join("\n")}
+${boltachContactEntries(data)}
 ${data.summary ? `\\CVSection{Profile}
 ${escapeLatex(data.summary)}` : ""}
 ${data.experience.length ? `\\CVSection{Experience}
@@ -1449,11 +1547,9 @@ export function generateResumeMarkdown(data: ResumeData): string {
   const lines: string[] = [`# ${data.header.name}`];
   const headerDetails = nonEmpty([
     data.header.title,
-    data.header.location,
-    data.header.phone,
-    data.header.email,
-    data.header.linkedin,
-    data.header.portfolio,
+    ...getResumeContactItems(data.header).map((item) =>
+      item.href ? `[${item.text}](${item.href})` : item.text
+    ),
   ]);
 
   if (headerDetails.length) lines.push("", headerDetails.join(" | "));

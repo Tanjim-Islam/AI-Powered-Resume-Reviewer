@@ -41,6 +41,7 @@ import {
   generateResumeLatex,
   generateResumeMarkdown,
   getResumeTemplate,
+  upgradeResumeLatexContacts,
 } from "@/lib/resume-templates";
 import type {
   ResumeData,
@@ -98,8 +99,9 @@ export function ResumeStudio({
     initialTemplateId,
     rewriteData.json,
   );
-  const initialLatexSource =
-    rewriteData.latex_source || generatedInitialLatex;
+  const initialLatexSource = rewriteData.latex_source
+    ? upgradeResumeLatexContacts(rewriteData.latex_source, rewriteData.json)
+    : generatedInitialLatex;
   const [activeTab, setActiveTab] = useState("preview");
   const [resumeData, setResumeData] = useState(rewriteData.json);
   const [templateId, setTemplateId] =

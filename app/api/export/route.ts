@@ -3,11 +3,13 @@ import {
   AlignmentType,
   BorderStyle,
   Document,
+  ExternalHyperlink,
   HeadingLevel,
   Packer,
   Paragraph,
   TextRun,
 } from "docx";
+import { getResumeContactItems } from "@/lib/resume-contact";
 import { ExportRequestSchema, type ResumeData } from "@/lib/schemas";
 
 export const runtime = "nodejs";
@@ -43,13 +45,7 @@ function bullet(text: string) {
 }
 
 function generateDocx(data: ResumeData): Promise<Buffer> {
-  const contacts = [
-    data.header.location,
-    data.header.phone,
-    data.header.email,
-    data.header.linkedin,
-    data.header.portfolio,
-  ].filter(Boolean);
+  const contacts = getResumeContactItems(data.header);
 
   const content: Paragraph[] = [
     new Paragraph({
@@ -84,11 +80,32 @@ function generateDocx(data: ResumeData): Promise<Buffer> {
   }
 
   if (contacts.length) {
+    const contactRuns = contacts.flatMap((contact, index) => {
+      const separator =
+        index === 0 ? [] : [new TextRun({ text: " | ", size: 18 })];
+      const content = contact.href
+        ? [
+            new ExternalHyperlink({
+              children: [
+                new TextRun({
+                  text: contact.text,
+                  style: "Hyperlink",
+                  size: 18,
+                }),
+              ],
+              link: contact.href,
+            }),
+          ]
+        : [new TextRun({ text: contact.text, size: 18 })];
+
+      return [...separator, ...content];
+    });
+
     content.push(
       new Paragraph({
         alignment: AlignmentType.CENTER,
         spacing: { after: 140 },
-        children: [new TextRun({ text: contacts.join(" | "), size: 18 })],
+        children: contactRuns,
       })
     );
   }
