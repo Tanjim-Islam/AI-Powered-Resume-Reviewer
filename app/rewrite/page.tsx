@@ -1,41 +1,80 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { Suspense, useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { FileText, Loader2 } from "lucide-react";
+import { toast } from "sonner";
 import { AppShell } from "@/components/app-shell";
-import { RewritePreview } from "@/components/rewrite-preview";
+import { ResumeStudio } from "@/components/resume-studio";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
-import { Loader2, FileText } from "lucide-react";
-import { RewriteResponse } from "@/lib/schemas";
+import { readApiResponse } from "@/lib/api-response";
+import type {
+  ResumeData,
+  ResumeRewriteSave,
+  RewriteResponse,
+} from "@/lib/schemas";
 
-export default function RewritePage() {
+function RewritePageContent() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const rewriteId = searchParams.get("id");
   const [resumeText, setResumeText] = useState("");
   const [jobDescription, setJobDescription] = useState("");
+  const [isLoadingSaved, setIsLoadingSaved] = useState(Boolean(rewriteId));
   const [isRewriting, setIsRewriting] = useState(false);
-  const [exportingFormat, setExportingFormat] = useState<"docx" | "pdf" | null>(
-    null
-  );
   const [rewriteData, setRewriteData] = useState<RewriteResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // Hydrate from precomputed rewrite if available
   useEffect(() => {
-    try {
-      const stored = sessionStorage.getItem("rewriteResult");
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        setRewriteData(parsed);
+    let active = true;
+
+    const hydrate = async () => {
+      if (rewriteId) {
+        setIsLoadingSaved(true);
+        try {
+          const response = await fetch(`/api/rewrite/${rewriteId}`, {
+            cache: "no-store",
+          });
+          const saved = await readApiResponse<RewriteResponse>(
+            response,
+            "Could not load this saved resume."
+          );
+          if (active) setRewriteData(saved);
+        } catch (loadError) {
+          if (active) {
+            toast.error(
+              loadError instanceof Error
+                ? loadError.message
+                : "Could not load this saved resume."
+            );
+          }
+        } finally {
+          if (active) setIsLoadingSaved(false);
+        }
+        return;
+      }
+
+      try {
+        const stored = sessionStorage.getItem("rewriteResult");
+        if (stored && active) {
+          setRewriteData(JSON.parse(stored) as RewriteResponse);
+        }
+      } catch {
         sessionStorage.removeItem("rewriteResult");
       }
-    } catch {
-      // ignore hydration failure
-    }
-  }, []);
+    };
+
+    void hydrate();
+    return () => {
+      active = false;
+    };
+  }, [rewriteId]);
 
   const handleRewrite = async () => {
-    if (!resumeText.trim()) {
-      setError("Please enter your resume text");
+    if (resumeText.trim().length < 200) {
+      setError("Enter at least 200 characters from your resume.");
       return;
     }
 
@@ -45,174 +84,174 @@ export default function RewritePage() {
     try {
       const response = await fetch("/api/rewrite", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           resumeText: resumeText.trim(),
           jobDescription: jobDescription.trim() || undefined,
+          resumeName: "Pasted resume",
         }),
       });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || "Rewrite failed");
-      }
-
-      const data = await response.json();
+      const data = await readApiResponse<RewriteResponse>(
+        response,
+        "Resume rewriting is temporarily unavailable. Please try again."
+      );
       setRewriteData(data);
-    } catch (error) {
-      console.error("Rewrite error:", error);
-      setError(error instanceof Error ? error.message : "Rewrite failed");
+      sessionStorage.setItem("rewriteResult", JSON.stringify(data));
+      if (data.rewrite_id) {
+        router.replace(`/rewrite?id=${data.rewrite_id}`);
+      }
+    } catch (rewriteError) {
+      setError(
+        rewriteError instanceof Error ? rewriteError.message : "Rewrite failed."
+      );
     } finally {
       setIsRewriting(false);
     }
   };
 
-  const handleSave = async (updatedJson: RewriteResponse["json"]) => {
-    if (!rewriteData) return;
+  const handleSave = async (payload: ResumeRewriteSave) => {
     const nextData: RewriteResponse = {
-      ...rewriteData,
-      json: updatedJson,
+      ...rewriteData!,
+      ...payload,
     };
-    setRewriteData(nextData);
-    try {
-      sessionStorage.setItem("rewriteResult", JSON.stringify(nextData));
-    } catch {
-      // ignore storage errors
+
+    if (rewriteData?.rewrite_id) {
+      const response = await fetch(`/api/rewrite/${rewriteData.rewrite_id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const saved = await readApiResponse<RewriteResponse>(
+        response,
+        "Could not save this resume."
+      );
+      setRewriteData(saved);
+      sessionStorage.setItem("rewriteResult", JSON.stringify(saved));
+      return;
     }
+
+    setRewriteData(nextData);
+    sessionStorage.setItem("rewriteResult", JSON.stringify(nextData));
   };
 
-  const handleExport = async (format: "docx" | "pdf") => {
-    if (!rewriteData) return;
+  const handleDownloadDocx = async (data: ResumeData) => {
+    const response = await fetch("/api/export", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ rewriteJson: data, format: "docx" }),
+    });
 
-    setExportingFormat(format);
-    try {
-      const response = await fetch("/api/export", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          rewriteJson: rewriteData.json,
-          format,
-        }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || "Export failed");
-      }
-
-      // Download the file
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `resume-${Date.now()}.${format}`;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
-    } catch (error) {
-      console.error("Export error:", error);
-      alert(error instanceof Error ? error.message : "Export failed");
-    } finally {
-      setExportingFormat(null);
+    if (!response.ok) {
+      await readApiResponse(
+        response,
+        "Resume export is temporarily unavailable. Please try again."
+      );
     }
+
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `${data.header.name || "resume"}.docx`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
   };
 
   return (
     <AppShell>
       <div className="container mx-auto px-4 py-8">
-        {!rewriteData ? (
-          <div className="max-w-4xl mx-auto">
-            <div className="text-center mb-8">
-              <h1 className="text-4xl font-bold text-gray-800 mb-4">
-                AI Resume Rewriter
+        {isLoadingSaved ? (
+          <div className="flex min-h-[60vh] items-center justify-center">
+            <Loader2 className="size-7 animate-spin text-teal-600" />
+          </div>
+        ) : rewriteData ? (
+          <ResumeStudio
+            rewriteData={rewriteData}
+            onSave={handleSave}
+            onDownloadDocx={handleDownloadDocx}
+          />
+        ) : (
+          <div className="mx-auto max-w-4xl">
+            <div className="mb-8 text-center">
+              <p className="text-sm font-medium text-teal-700">Resume studio</p>
+              <h1 className="mt-1 text-4xl font-bold tracking-tight text-gray-900">
+                Rewrite your resume
               </h1>
-              <p className="text-xl text-gray-600">
-                Get a completely rewritten resume with improved content and
-                structure
+              <p className="mt-2 text-gray-600">
+                Create an editable resume with professional PDF templates.
               </p>
             </div>
 
-            <Card className="p-8 bg-white/80 backdrop-blur-sm border-white/20">
+            <Card className="border-white/40 bg-white/85 p-6 shadow-lg backdrop-blur-xl sm:p-8">
               <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  handleRewrite();
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  void handleRewrite();
                 }}
                 className="space-y-6"
               >
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Resume Text *
-                  </label>
+                <label className="block space-y-2">
+                  <span className="text-sm font-medium text-gray-700">
+                    Resume text
+                  </span>
                   <Textarea
                     value={resumeText}
-                    onChange={(e) => setResumeText(e.target.value)}
-                    placeholder="Paste your current resume text here..."
-                    className="min-h-64"
+                    onChange={(event) => setResumeText(event.target.value)}
+                    placeholder="Paste your current resume text"
+                    className="min-h-64 border-gray-200 bg-white"
                     required
                   />
-                  <p className="text-sm text-gray-500 mt-2">
-                    Character count: {resumeText.length}
-                  </p>
-                </div>
+                </label>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Job Description (Optional)
-                  </label>
+                <label className="block space-y-2">
+                  <span className="text-sm font-medium text-gray-700">
+                    Job description
+                    <span className="ml-1 font-normal text-gray-400">
+                      Optional
+                    </span>
+                  </span>
                   <Textarea
                     value={jobDescription}
-                    onChange={(e) => setJobDescription(e.target.value)}
-                    placeholder="Paste the job description to tailor the rewrite..."
-                    className="min-h-32"
+                    onChange={(event) =>
+                      setJobDescription(event.target.value)
+                    }
+                    placeholder="Paste the role you are targeting"
+                    className="min-h-32 border-gray-200 bg-white"
                   />
-                  <p className="text-sm text-gray-500 mt-2">
-                    Character count: {jobDescription.length}
-                  </p>
-                </div>
+                </label>
 
                 {error && (
-                  <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-                    <p className="text-red-700">{error}</p>
-                  </div>
+                  <p className="text-sm font-medium text-red-600">{error}</p>
                 )}
 
                 <Button
                   type="submit"
-                  disabled={isRewriting || !resumeText.trim()}
-                  className="w-full bg-teal-600 hover:bg-teal-700 text-white py-3 text-lg font-medium"
+                  disabled={isRewriting || resumeText.trim().length < 200}
+                  className="w-full bg-teal-600 py-3 text-white hover:bg-teal-700"
                 >
                   {isRewriting ? (
-                    <>
-                      <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                      Rewriting Resume...
-                    </>
+                    <Loader2 className="size-5 animate-spin" />
                   ) : (
-                    <>
-                      <FileText className="w-5 h-5 mr-2" />
-                      Rewrite Resume
-                    </>
+                    <FileText className="size-5" />
                   )}
+                  {isRewriting ? "Rewriting" : "Rewrite resume"}
                 </Button>
               </form>
             </Card>
           </div>
-        ) : (
-          <RewritePreview
-            rewriteData={rewriteData}
-            onExport={handleExport}
-            onSave={async (data) => {
-              await handleSave(data);
-            }}
-            exportingFormat={exportingFormat}
-          />
         )}
       </div>
     </AppShell>
+  );
+}
+
+export default function RewritePage() {
+  return (
+    <Suspense fallback={null}>
+      <RewritePageContent />
+    </Suspense>
   );
 }

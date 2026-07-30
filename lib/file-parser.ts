@@ -16,24 +16,21 @@ export async function parseResumeFile(file: File): Promise<ParsedResume> {
     }
 
     if (fileType === "application/pdf") {
-      // Use the core parser directly to avoid pdf-parse's debug self-test in its root entry.
-      const pdfModule = (await import("pdf-parse/lib/pdf-parse.js")) as unknown;
-      const pdfFn =
-        (pdfModule as { pdf?: (data: Buffer) => Promise<unknown> }).pdf ??
-        (pdfModule as { default?: (data: Buffer) => Promise<unknown> }).default ??
-        (pdfModule as (data: Buffer) => Promise<unknown>);
+      await import("pdf-parse/worker");
+      const { PDFParse } = await import("pdf-parse");
       const arrayBuffer = await file.arrayBuffer();
-      const pdfBuffer = Buffer.from(arrayBuffer);
-      const data = await (pdfFn as (
-        data: Buffer
-      ) => Promise<{ text?: string } | string>)(pdfBuffer);
-      const text = typeof data === "string" ? data : data.text;
+      const parser = new PDFParse({ data: Buffer.from(arrayBuffer) });
 
-      return {
-        text: text?.trim() || "",
-        fileName,
-        fileType,
-      };
+      try {
+        const result = await parser.getText();
+        return {
+          text: result.text.trim(),
+          fileName,
+          fileType,
+        };
+      } finally {
+        await parser.destroy();
+      }
     } else if (
       fileType ===
       "application/vnd.openxmlformats-officedocument.wordprocessingml.document"

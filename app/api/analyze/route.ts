@@ -2,8 +2,37 @@ import { NextRequest, NextResponse } from "next/server";
 import { parseResumeFile, validateJobDescription } from "@/lib/file-parser";
 import { llmProvider } from "@/lib/llm-provider";
 import { AnalyzeResponseSchema } from "@/lib/schemas";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+export const maxDuration = 120;
+
+type ProfileContextRow = {
+  profession: string | null;
+  job_preferences: string | null;
+  modification_preferences: string | null;
+  memory_notes: string | null;
+};
+
+function formatProfileContext(profile: ProfileContextRow | null) {
+  if (!profile) {
+    return "";
+  }
+
+  const fields = [
+    ["Profession", profile.profession],
+    ["Job preferences", profile.job_preferences],
+    ["Editing preferences", profile.modification_preferences],
+    ["Saved memory", profile.memory_notes],
+  ].filter((entry): entry is [string, string] => Boolean(entry[1]));
+
+  if (fields.length === 0) {
+    return "";
+  }
+
+  return fields.map(([label, value]) => `${label}: ${value}`).join("\n");
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -57,6 +86,35 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const supabase = await createSupabaseServerClient();
+    let signedInUserId: string | null = null;
+    let profileContext = "";
+
+    if (supabase) {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (user) {
+        signedInUserId = user.id;
+        const { data: profile, error: profileError } = await supabase
+          .from("profiles")
+          .select(
+            "profession, job_preferences, modification_preferences, memory_notes"
+          )
+          .eq("id", user.id)
+          .maybeSingle();
+
+        if (profileError) {
+          console.error("Profile context lookup failed:", profileError.code);
+        } else {
+          profileContext = formatProfileContext(
+            profile as ProfileContextRow | null
+          );
+        }
+      }
+    }
+
     // Generate analysis using LLM
     const systemPrompt = `You are a strict ATS resume analyst and writing coach. Output must be valid JSON that conforms to the provided schema. Do not include commentary outside JSON.
 
@@ -78,7 +136,10 @@ Return:
 ${parsedResume.text}
 
 Job Description:
-${jobDescription || "N/A"}`;
+${jobDescription || "N/A"}
+
+Account Preferences:
+${profileContext || "N/A"}`;
 
     const analysis = await llmProvider.generateJson(
       AnalyzeResponseSchema,
@@ -86,12 +147,47 @@ ${jobDescription || "N/A"}`;
       userPrompt
     );
 
-    // Include original resume text and job description for downstream rewrite flow
-    return NextResponse.json({
+    const responseData = {
       ...analysis,
       original_resume_text: parsedResume.text,
       job_description: jobDescription || "",
-    });
+      resume_name: parsedResume.fileName,
+    };
+
+    let analysisId: string | null = null;
+    if (supabase && signedInUserId) {
+      const { data: savedAnalysis, error: historyError } = await supabase
+        .from("resume_analyses")
+        .insert({
+          user_id: signedInUserId,
+          resume_name: parsedResume.fileName,
+          resume_text: parsedResume.text,
+          job_description: jobDescription || "",
+          ats_score: analysis.ats_score,
+          analysis,
+        })
+        .select("id")
+        .single();
+
+      if (historyError) {
+        console.error("Analysis history save failed:", historyError.code);
+      } else {
+        analysisId = savedAnalysis.id as string;
+      }
+    }
+
+    // Guests receive results without persistence. Signed-in users get a history ID.
+    return NextResponse.json(
+      {
+        ...responseData,
+        analysis_id: analysisId,
+      },
+      {
+        headers: {
+          "Cache-Control": "private, no-store",
+        },
+      }
+    );
   } catch (error) {
     console.error("Analysis error:", error);
 
@@ -105,7 +201,18 @@ ${jobDescription || "N/A"}`;
         return NextResponse.json({ error: message }, { status: 400 });
       }
 
-      return NextResponse.json({ error: message }, { status: 500 });
+      if (
+        message.startsWith("Rate limit exceeded") ||
+        message.startsWith("AI service timed out") ||
+        message.startsWith("Gemini API service is temporarily unavailable")
+      ) {
+        return NextResponse.json({ error: message }, { status: 503 });
+      }
+
+      return NextResponse.json(
+        { error: "Resume analysis failed. Please try again." },
+        { status: 500 }
+      );
     }
 
     return NextResponse.json(

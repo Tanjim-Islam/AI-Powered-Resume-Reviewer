@@ -2,6 +2,9 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { ToastProvider } from "@/components/toast-provider";
+import { AuthProvider } from "@/components/auth-provider";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { toAppUser } from "@/lib/supabase/user";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -19,11 +22,24 @@ export const metadata: Metadata = {
     "Get instant ATS feedback, keyword analysis, and AI-powered resume improvements",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  let initialUser = null;
+  const supabase = await createSupabaseServerClient();
+
+  if (supabase) {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (user) {
+      initialUser = toAppUser(user);
+    }
+  }
+
   return (
     <html lang="en">
       <body
@@ -46,8 +62,10 @@ export default function RootLayout({
           />
           {/* Content */}
           <div className="relative z-10">
-            {children}
-            <ToastProvider />
+            <AuthProvider initialUser={initialUser}>
+              {children}
+              <ToastProvider />
+            </AuthProvider>
           </div>
         </div>
       </body>

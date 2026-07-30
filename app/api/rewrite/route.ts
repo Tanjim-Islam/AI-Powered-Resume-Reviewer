@@ -1,61 +1,146 @@
 import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
 import { llmProvider } from "@/lib/llm-provider";
-import { RewriteResponseSchema } from "@/lib/schemas";
+import {
+  RewriteModelResponseSchema,
+  type ResumeTemplateId,
+} from "@/lib/schemas";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
+import {
+  DEFAULT_RESUME_TEMPLATE_ID,
+  generateResumeLatex,
+  generateResumeMarkdown,
+  isResumeTemplateId,
+} from "@/lib/resume-templates";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+export const maxDuration = 120;
+
+const RewriteRequestSchema = z.object({
+  resumeText: z.string().min(200).max(100_000),
+  jobDescription: z.string().max(30_000).optional(),
+  analysis: z.record(z.string(), z.unknown()).optional(),
+  analysisId: z.string().uuid().nullable().optional(),
+  resumeName: z.string().max(255).optional(),
+});
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
-    const { resumeText, jobDescription, analysis } = body as {
-      resumeText: string;
-      jobDescription?: string;
-      analysis?: Record<string, unknown>;
-    };
-
-    if (!resumeText || resumeText.length < 200) {
+    const parsedRequest = RewriteRequestSchema.safeParse(await request.json());
+    if (!parsedRequest.success) {
       return NextResponse.json(
-        {
-          error: "Resume text is required and must be at least 200 characters",
-        },
+        { error: "Resume text is required and must be at least 200 characters." },
         { status: 400 }
       );
     }
 
-    const systemPrompt = `You are a resume rewriter that produces recruiter friendly content with measurable impact, strong action verbs, and concise bullets. 
+    const {
+      resumeText,
+      jobDescription,
+      analysis,
+      analysisId,
+      resumeName = "Resume",
+    } = parsedRequest.data;
 
-Rewrite the resume below into a clean structure with these sections: Header, Summary, Skills grouped, Experience, Projects, Education, Certifications if any. Tailor wording to the job description if provided. Keep truthfulness, do not invent employers or degrees. Add metrics only when safely inferable from the text. Use crisp language.
+    const supabase = await createSupabaseServerClient();
+    let signedInUserId: string | null = null;
+    let accountPreferences = "";
+    let preferredTemplateId: ResumeTemplateId =
+      DEFAULT_RESUME_TEMPLATE_ID;
+    let photoPath: string | null = null;
+    let verifiedAnalysisId: string | null = null;
+    let verifiedResumeName = resumeName;
 
-If analysis data is provided, thoughtfully incorporate its insights: prefer the suggested improved bullets when aligned with the resume facts, address missing sections when information exists, and reflect formatting tips in the markdown output. Do not fabricate details to satisfy suggestions.
+    if (supabase) {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
 
-You must return a JSON object with exactly two fields:
-1. "markdown": A string containing the rewritten resume in Markdown format with clear headings and bullet lists
-2. "json": An object with the structured resume data containing header, summary, skills, experience, projects, education, and certifications
+      if (user) {
+        signedInUserId = user.id;
+        const { data: profile, error: profileError } = await supabase
+          .from("profiles")
+          .select(
+            "profession, job_preferences, modification_preferences, memory_notes, preferred_template_id, resume_photo_path"
+          )
+          .eq("id", user.id)
+          .maybeSingle();
 
-The JSON structure must match this schema and include explicit contact fields when available:
+        if (profileError) {
+          console.error("Rewrite preferences lookup failed:", profileError.code);
+        } else if (profile) {
+          const values = [
+            ["Profession", profile.profession],
+            ["Job preferences", profile.job_preferences],
+            ["Editing preferences", profile.modification_preferences],
+            ["Saved memory", profile.memory_notes],
+          ].filter((entry) => Boolean(entry[1]));
+
+          accountPreferences = values
+            .map(([label, value]) => `${label}: ${value}`)
+            .join("\n");
+
+          if (isResumeTemplateId(profile.preferred_template_id)) {
+            preferredTemplateId = profile.preferred_template_id;
+          }
+          photoPath =
+            typeof profile.resume_photo_path === "string"
+              ? profile.resume_photo_path
+              : null;
+        }
+
+        if (analysisId) {
+          const { data: ownedAnalysis } = await supabase
+            .from("resume_analyses")
+            .select("id, resume_name")
+            .eq("id", analysisId)
+            .eq("user_id", user.id)
+            .maybeSingle();
+
+          if (ownedAnalysis) {
+            verifiedAnalysisId = ownedAnalysis.id as string;
+            verifiedResumeName = ownedAnalysis.resume_name as string;
+          }
+        }
+      }
+    }
+
+    const systemPrompt = `You are a resume rewriter that produces recruiter-friendly content with measurable impact, strong action verbs, and concise bullets.
+
+Rewrite the resume into a clean structure with these sections when supported by the source: Header, Summary, Skills, Experience, Projects, Education, Certifications, Publications, Awards, Languages, and Interests. Tailor wording to the job description if provided. Preserve facts. Do not invent employers, degrees, metrics, publications, credentials, or personal details.
+
+If analysis data is provided, incorporate useful suggestions only when they align with facts in the resume.
+
+Return a JSON object with exactly two fields:
+1. "markdown": the rewritten resume in Markdown
+2. "json": structured resume data
+
+The json object must have this shape:
 {
-  "markdown": "string",
-  "json": {
-    "header": {
-      "name": "string",
-      "title": "string",
-      "location": "string",
-      "phone": "string",
-      "email": "string",
-      "linkedin": "string",
-      "portfolio": "string",
-      "links": ["string"]
-    },
-    "summary": "string",
-    "skills": [{"group": "string", "items": ["string"]}],
-    "experience": [{"company": "string", "role": "string", "start": "string", "end": "string", "bullets": ["string"], "tech": ["string"]}],
-    "projects": [{"name": "string", "description": "string", "bullets": ["string"], "tech": ["string"]}],
-    "education": [{"school": "string", "degree": "string", "year": "string", "cgpa": "string"}],
-    "certifications": ["string"]
-  }
+  "header": {
+    "name": "string",
+    "title": "string",
+    "location": "string",
+    "phone": "string",
+    "email": "string",
+    "linkedin": "string",
+    "portfolio": "string",
+    "links": ["string"]
+  },
+  "summary": "string",
+  "skills": [{"group": "string", "items": ["string"]}],
+  "experience": [{"company": "string", "role": "string", "start": "string", "end": "string", "bullets": ["string"], "tech": ["string"]}],
+  "projects": [{"name": "string", "description": "string", "bullets": ["string"], "tech": ["string"]}],
+  "education": [{"school": "string", "degree": "string", "year": "string", "cgpa": "string"}],
+  "certifications": ["string"],
+  "publications": [{"title": "string", "venue": "string", "year": "string"}],
+  "awards": ["string"],
+  "languages": ["string"],
+  "interests": ["string"]
 }
 
-When a contact detail is missing from the source resume, return an empty string for that field rather than omitting the key.`;
+Use empty strings or empty arrays for missing information.`;
 
     const userPrompt = `Resume:
 ${resumeText}
@@ -63,25 +148,90 @@ ${resumeText}
 Job Description:
 ${jobDescription || "N/A"}
 
-Analysis (may be empty):
-${analysis ? JSON.stringify(analysis) : "{}"}`;
+Analysis:
+${analysis ? JSON.stringify(analysis) : "{}"}
 
-    const rewrite = await llmProvider.generateJson(
-      RewriteResponseSchema,
+Account Preferences:
+${accountPreferences || "N/A"}`;
+
+    const modelRewrite = await llmProvider.generateJson(
+      RewriteModelResponseSchema,
       systemPrompt,
       userPrompt
     );
 
-    return NextResponse.json(rewrite);
+    const markdown = generateResumeMarkdown(modelRewrite.json);
+    const latexSource = generateResumeLatex(
+      preferredTemplateId,
+      modelRewrite.json
+    );
+
+    let rewriteId: string | null = null;
+    if (supabase && signedInUserId) {
+      const writePayload = {
+        user_id: signedInUserId,
+        analysis_id: verifiedAnalysisId,
+        resume_name: verifiedResumeName,
+        source_resume_text: resumeText,
+        job_description: jobDescription || "",
+        rewrite_json: modelRewrite.json,
+        rewrite_markdown: markdown,
+        latex_source: latexSource,
+        template_id: preferredTemplateId,
+        photo_path: photoPath,
+      };
+
+      const writeQuery = verifiedAnalysisId
+        ? supabase
+            .from("resume_rewrites")
+            .upsert(writePayload, { onConflict: "analysis_id" })
+        : supabase.from("resume_rewrites").insert(writePayload);
+
+      const { data: savedRewrite, error: saveError } = await writeQuery
+        .select("id")
+        .single();
+
+      if (saveError) {
+        console.error("Resume rewrite save failed:", saveError.code);
+      } else {
+        rewriteId = savedRewrite.id as string;
+      }
+    }
+
+    return NextResponse.json(
+      {
+        json: modelRewrite.json,
+        markdown,
+        rewrite_id: rewriteId,
+        analysis_id: verifiedAnalysisId,
+        resume_name: verifiedResumeName,
+        template_id: preferredTemplateId,
+        latex_source: latexSource,
+        photo_path: photoPath,
+      },
+      {
+        headers: {
+          "Cache-Control": "private, no-store",
+        },
+      }
+    );
   } catch (error) {
     console.error("Rewrite error:", error);
 
     if (error instanceof Error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      if (
+        error.message.startsWith("Rate limit exceeded") ||
+        error.message.startsWith("AI service timed out") ||
+        error.message.startsWith(
+          "Gemini API service is temporarily unavailable"
+        )
+      ) {
+        return NextResponse.json({ error: error.message }, { status: 503 });
+      }
     }
 
     return NextResponse.json(
-      { error: "Internal server error" },
+      { error: "Resume rewriting failed. Please try again." },
       { status: 500 }
     );
   }

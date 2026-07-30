@@ -1,606 +1,268 @@
 import { NextRequest, NextResponse } from "next/server";
-import { Document, Packer, Paragraph, TextRun, HeadingLevel } from "docx";
-import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
-import { ExportRequestSchema, RewriteResponse } from "@/lib/schemas";
+import {
+  AlignmentType,
+  BorderStyle,
+  Document,
+  HeadingLevel,
+  Packer,
+  Paragraph,
+  TextRun,
+} from "docx";
+import { ExportRequestSchema, type ResumeData } from "@/lib/schemas";
 
 export const runtime = "nodejs";
 
-export async function POST(request: NextRequest) {
-  try {
-    const body = await request.json();
-    const { rewriteJson, format } = ExportRequestSchema.parse(body);
-
-    if (format === "docx") {
-      const docxBuffer = await generateDocx(rewriteJson);
-
-      return new NextResponse(new Uint8Array(docxBuffer), {
-        headers: {
-          "Content-Type":
-            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-          "Content-Disposition": `attachment; filename="resume-${Date.now()}.docx"`,
-        },
-      });
-    } else if (format === "pdf") {
-      const pdfBuffer = await generatePdf(rewriteJson);
-
-      return new NextResponse(new Uint8Array(pdfBuffer), {
-        headers: {
-          "Content-Type": "application/pdf",
-          "Content-Disposition": `attachment; filename="resume-${Date.now()}.pdf"`,
-        },
-      });
-    } else {
-      return NextResponse.json(
-        { error: "Invalid format. Use 'docx' or 'pdf'" },
-        { status: 400 }
-      );
-    }
-  } catch (error) {
-    console.error("Export error:", error);
-
-    if (error instanceof Error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
-    }
-
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 }
-    );
-  }
+function sectionHeading(title: string) {
+  return new Paragraph({
+    heading: HeadingLevel.HEADING_2,
+    spacing: { before: 260, after: 100 },
+    border: {
+      bottom: {
+        style: BorderStyle.SINGLE,
+        size: 8,
+        color: "0F766E",
+      },
+    },
+    children: [
+      new TextRun({
+        text: title.toUpperCase(),
+        bold: true,
+        size: 22,
+        color: "0F766E",
+      }),
+    ],
+  });
 }
 
-async function generateDocx(
-  resumeData: RewriteResponse["json"]
-): Promise<Buffer> {
-  const doc = new Document({
+function bullet(text: string) {
+  return new Paragraph({
+    text,
+    bullet: { level: 0 },
+    spacing: { after: 60 },
+  });
+}
+
+function generateDocx(data: ResumeData): Promise<Buffer> {
+  const contacts = [
+    data.header.location,
+    data.header.phone,
+    data.header.email,
+    data.header.linkedin,
+    data.header.portfolio,
+  ].filter(Boolean);
+
+  const content: Paragraph[] = [
+    new Paragraph({
+      alignment: AlignmentType.CENTER,
+      spacing: { after: 80 },
+      children: [
+        new TextRun({
+          text: data.header.name,
+          bold: true,
+          size: 34,
+          color: "17212B",
+        }),
+      ],
+    }),
+  ];
+
+  if (data.header.title) {
+    content.push(
+      new Paragraph({
+        alignment: AlignmentType.CENTER,
+        spacing: { after: 60 },
+        children: [
+          new TextRun({
+            text: data.header.title,
+            bold: true,
+            size: 22,
+            color: "0F766E",
+          }),
+        ],
+      })
+    );
+  }
+
+  if (contacts.length) {
+    content.push(
+      new Paragraph({
+        alignment: AlignmentType.CENTER,
+        spacing: { after: 140 },
+        children: [new TextRun({ text: contacts.join(" | "), size: 18 })],
+      })
+    );
+  }
+
+  if (data.summary) {
+    content.push(
+      sectionHeading("Summary"),
+      new Paragraph({ text: data.summary, spacing: { after: 80 } })
+    );
+  }
+
+  if (data.skills.length) {
+    content.push(sectionHeading("Skills"));
+    for (const skill of data.skills) {
+      content.push(
+        new Paragraph({
+          spacing: { after: 60 },
+          children: [
+            new TextRun({ text: `${skill.group}: `, bold: true }),
+            new TextRun(skill.items.join(", ")),
+          ],
+        })
+      );
+    }
+  }
+
+  if (data.experience.length) {
+    content.push(sectionHeading("Experience"));
+    for (const experience of data.experience) {
+      content.push(
+        new Paragraph({
+          spacing: { before: 100, after: 20 },
+          children: [
+            new TextRun({
+              text: `${experience.role} at ${experience.company}`,
+              bold: true,
+              size: 21,
+            }),
+          ],
+        }),
+        new Paragraph({
+          spacing: { after: 60 },
+          children: [
+            new TextRun({
+              text: [experience.start, experience.end]
+                .filter(Boolean)
+                .join(" - "),
+              italics: true,
+              color: "64748B",
+            }),
+          ],
+        }),
+        ...experience.bullets.map(bullet)
+      );
+    }
+  }
+
+  if (data.projects.length) {
+    content.push(sectionHeading("Projects"));
+    for (const project of data.projects) {
+      content.push(
+        new Paragraph({
+          spacing: { before: 80, after: 30 },
+          children: [
+            new TextRun({ text: project.name, bold: true, size: 21 }),
+            ...(project.tech?.length
+              ? [
+                  new TextRun({
+                    text: ` | ${project.tech.join(", ")}`,
+                    italics: true,
+                    color: "64748B",
+                  }),
+                ]
+              : []),
+          ],
+        })
+      );
+      if (project.description) {
+        content.push(
+          new Paragraph({
+            text: project.description,
+            spacing: { after: 40 },
+          })
+        );
+      }
+      content.push(...project.bullets.map(bullet));
+    }
+  }
+
+  if (data.education.length) {
+    content.push(sectionHeading("Education"));
+    for (const education of data.education) {
+      content.push(
+        new Paragraph({
+          spacing: { before: 60, after: 20 },
+          children: [
+            new TextRun({ text: education.degree, bold: true }),
+            new TextRun(
+              `${education.school ? `, ${education.school}` : ""}${
+                education.year ? ` | ${education.year}` : ""
+              }${education.cgpa ? ` | ${education.cgpa}` : ""}`
+            ),
+          ],
+        })
+      );
+    }
+  }
+
+  const additionalSections: Array<[string, string[] | undefined]> = [
+    ["Certifications", data.certifications],
+    [
+      "Publications",
+      data.publications?.map((publication) =>
+        [publication.title, publication.venue, publication.year]
+          .filter(Boolean)
+          .join(", ")
+      ),
+    ],
+    ["Awards", data.awards],
+    ["Languages", data.languages],
+    ["Interests", data.interests],
+  ];
+
+  for (const [title, items] of additionalSections) {
+    if (items?.length) {
+      content.push(sectionHeading(title), ...items.map(bullet));
+    }
+  }
+
+  const document = new Document({
     sections: [
       {
-        properties: {},
-        children: [
-          // Header with proper spacing
-          new Paragraph({
-            children: [
-              new TextRun({
-                text: resumeData.header.name,
-                bold: true,
-                size: 32,
-              }),
-            ],
-            heading: HeadingLevel.HEADING_1,
-          }),
-
-          ...(resumeData.header.title
-            ? [
-                new Paragraph({
-                  children: [
-                    new TextRun({
-                      text: resumeData.header.title,
-                      bold: true,
-                      size: 24,
-                    }),
-                  ],
-                }),
-              ]
-            : []),
-
-          ...(resumeData.header.location
-            ? [
-                new Paragraph({
-                  children: [
-                    new TextRun({
-                      text: resumeData.header.location,
-                      size: 20,
-                    }),
-                  ],
-                }),
-              ]
-            : []),
-
-          ...(() => {
-            const contacts = [
-              resumeData.header.phone,
-              resumeData.header.email,
-              resumeData.header.linkedin,
-              resumeData.header.portfolio,
-            ].filter(Boolean);
-
-            if (contacts.length === 0) {
-              return [];
-            }
-
-            return [
-              new Paragraph({
-                children: [
-                  new TextRun({
-                    text: contacts.join(" | "),
-                    size: 18,
-                  }),
-                ],
-              }),
-            ];
-          })(),
-
-          // Separator line after header
-          new Paragraph({
-            children: [
-              new TextRun({
-                text: "-".repeat(50),
-                size: 16,
-              }),
-            ],
-          }),
-
-          // Summary
-          new Paragraph({
-            children: [
-              new TextRun({
-                text: "SUMMARY",
-                bold: true,
-                size: 28,
-              }),
-            ],
-            heading: HeadingLevel.HEADING_2,
-            spacing: {
-              after: 300,
-              before: 200,
+        properties: {
+          page: {
+            margin: {
+              top: 540,
+              right: 620,
+              bottom: 540,
+              left: 620,
             },
-          }),
-          new Paragraph({
-            children: [
-              new TextRun({
-                text: resumeData.summary,
-                size: 22,
-              }),
-            ],
-            spacing: {
-              after: 400,
-            },
-          }),
-
-          // Skills
-          new Paragraph({
-            children: [
-              new TextRun({
-                text: "SKILLS",
-                bold: true,
-                size: 28,
-              }),
-            ],
-            heading: HeadingLevel.HEADING_2,
-            spacing: {
-              after: 300,
-              before: 200,
-            },
-          }),
-          ...resumeData.skills.flatMap(
-            (skillGroup: { group: string; items: string[] }) => [
-              new Paragraph({
-                children: [
-                  new TextRun({
-                    text: `${skillGroup.group}: `,
-                    bold: true,
-                    size: 20,
-                  }),
-                  new TextRun({
-                    text: skillGroup.items.join(", "),
-                    size: 20,
-                  }),
-                ],
-              }),
-            ]
-          ),
-
-          // Experience
-          new Paragraph({
-            children: [
-              new TextRun({
-                text: "EXPERIENCE",
-                bold: true,
-                size: 28,
-              }),
-            ],
-            heading: HeadingLevel.HEADING_2,
-            spacing: {
-              after: 300,
-              before: 200,
-            },
-          }),
-          ...resumeData.experience.flatMap(
-            (exp: {
-              company: string;
-              role: string;
-              start: string;
-              end: string;
-              bullets: string[];
-              tech?: string[];
-            }) => [
-              new Paragraph({
-                children: [
-                  new TextRun({
-                    text: `${exp.role} at ${exp.company}`,
-                    bold: true,
-                    size: 20,
-                  }),
-                ],
-              }),
-              new Paragraph({
-                children: [
-                  new TextRun({
-                    text: `${exp.start} - ${exp.end}`,
-                    size: 18,
-                  }),
-                ],
-              }),
-              ...exp.bullets.map(
-                (bullet: string) =>
-                  new Paragraph({
-                    children: [
-                      new TextRun({
-                        text: `• ${bullet}`,
-                        size: 20,
-                      }),
-                    ],
-                  })
-              ),
-            ]
-          ),
-
-          // Projects
-          ...(resumeData.projects.length > 0
-            ? [
-                new Paragraph({
-                  children: [
-                    new TextRun({
-                      text: "PROJECTS",
-                      bold: true,
-                      size: 28,
-                    }),
-                  ],
-                  heading: HeadingLevel.HEADING_2,
-                  spacing: {
-                    after: 300,
-                    before: 200,
-                  },
-                }),
-                ...resumeData.projects.flatMap(
-                  (project: {
-                    name: string;
-                    description: string;
-                    bullets: string[];
-                    tech?: string[];
-                  }) => [
-                    new Paragraph({
-                      children: [
-                        new TextRun({
-                          text: project.name,
-                          bold: true,
-                          size: 20,
-                        }),
-                      ],
-                    }),
-                    new Paragraph({
-                      children: [
-                        new TextRun({
-                          text: project.description,
-                          size: 20,
-                        }),
-                      ],
-                    }),
-                    ...project.bullets.map(
-                      (bullet: string) =>
-                        new Paragraph({
-                          children: [
-                            new TextRun({
-                              text: `• ${bullet}`,
-                              size: 20,
-                            }),
-                          ],
-                        })
-                    ),
-                  ]
-                ),
-              ]
-            : []),
-
-          // Education
-          new Paragraph({
-            children: [
-              new TextRun({
-                text: "EDUCATION",
-                bold: true,
-                size: 28,
-              }),
-            ],
-            heading: HeadingLevel.HEADING_2,
-            spacing: {
-              after: 300,
-              before: 200,
-            },
-          }),
-          ...resumeData.education.map(
-            (edu: {
-              school: string;
-              degree: string;
-              year?: string;
-              cgpa?: string;
-            }) => {
-              let eduText = `${edu.degree} - ${edu.school}`;
-              if (edu.cgpa) {
-                eduText += ` (CGPA: ${edu.cgpa})`;
-              }
-              return new Paragraph({
-                children: [
-                  new TextRun({
-                    text: eduText,
-                    bold: true,
-                    size: 20,
-                  }),
-                ],
-              });
-            }
-          ),
-
-          // Certifications
-          ...(resumeData.certifications && resumeData.certifications.length > 0
-            ? [
-                new Paragraph({
-                  children: [
-                    new TextRun({
-                      text: "CERTIFICATIONS",
-                      bold: true,
-                      size: 28,
-                    }),
-                  ],
-                  heading: HeadingLevel.HEADING_2,
-                  spacing: {
-                    after: 300,
-                    before: 200,
-                  },
-                }),
-                ...resumeData.certifications.map(
-                  (cert: string) =>
-                    new Paragraph({
-                      children: [
-                        new TextRun({
-                          text: `• ${cert}`,
-                          size: 20,
-                        }),
-                      ],
-                    })
-                ),
-              ]
-            : []),
-        ],
+          },
+        },
+        children: content,
       },
     ],
   });
 
-  return Buffer.from(await Packer.toBuffer(doc));
+  return Packer.toBuffer(document).then((buffer) => Buffer.from(buffer));
 }
 
-async function generatePdf(
-  resumeData: RewriteResponse["json"]
-): Promise<Buffer> {
-  const pdfDoc = await PDFDocument.create();
-  const pageSize: [number, number] = [612, 792]; // Letter size
-  let page = pdfDoc.addPage(pageSize);
-  let { width, height } = page.getSize();
-
-  const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
-  const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
-
-  let yPosition = height - 50;
-  const lineHeight = 20;
-  const sectionSpacing = 30;
-  const bottomMargin = 50;
-
-  const addPage = () => {
-    page = pdfDoc.addPage(pageSize);
-    ({ width, height } = page.getSize());
-    yPosition = height - 50;
-  };
-
-  const ensureSpace = (linesNeeded: number) => {
-    if (yPosition - linesNeeded * lineHeight < bottomMargin) {
-      addPage();
+export async function POST(request: NextRequest) {
+  try {
+    const parsed = ExportRequestSchema.safeParse(await request.json());
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: "Only DOCX export is available through this endpoint." },
+        { status: 400 }
+      );
     }
-  };
 
-  const addText = (
-    text: string,
-    x: number,
-    y: number,
-    fontSize: number = 12,
-    isBold: boolean = false
-  ) => {
-    page.drawText(text, {
-      x,
-      y,
-      size: fontSize,
-      font: isBold ? boldFont : font,
-      color: rgb(0, 0, 0),
+    const buffer = await generateDocx(parsed.data.rewriteJson);
+    return new NextResponse(new Uint8Array(buffer), {
+      headers: {
+        "Content-Type":
+          "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "Content-Disposition": `attachment; filename="resume-${Date.now()}.docx"`,
+        "Cache-Control": "private, no-store",
+      },
     });
-  };
-
-  const wrapText = (
-    text: string,
-    maxWidth: number,
-    fontSize: number = 12
-  ): string[] => {
-    const words = text.split(" ");
-    const lines: string[] = [];
-    let currentLine = "";
-
-    for (const word of words) {
-      const testLine = currentLine + (currentLine ? " " : "") + word;
-      const testWidth = font.widthOfTextAtSize(testLine, fontSize);
-
-      if (testWidth > maxWidth && currentLine) {
-        lines.push(currentLine);
-        currentLine = word;
-      } else {
-        currentLine = testLine;
-      }
-    }
-
-    if (currentLine) {
-      lines.push(currentLine);
-    }
-
-    return lines;
-  };
-
-  // Header with proper spacing
-  addText(resumeData.header.name, 50, yPosition, 24, true);
-  yPosition -= 30;
-
-  if (resumeData.header.title) {
-    ensureSpace(1.5);
-    addText(resumeData.header.title, 50, yPosition, 16, true);
-    yPosition -= 20;
+  } catch (error) {
+    console.error("DOCX export error:", error);
+    return NextResponse.json(
+      { error: "Resume export failed. Please try again." },
+      { status: 500 }
+    );
   }
-
-  if (resumeData.header.location) {
-    ensureSpace(1.5);
-    addText(resumeData.header.location, 50, yPosition, 14);
-    yPosition -= 20;
-  }
-
-  const contacts = [
-    resumeData.header.phone,
-    resumeData.header.email,
-    resumeData.header.linkedin,
-    resumeData.header.portfolio,
-  ].filter(Boolean);
-
-  if (contacts.length > 0) {
-    ensureSpace(1.5);
-    addText(contacts.join(" | "), 50, yPosition, 12);
-    yPosition -= 20;
-  }
-
-  // Separator line after header
-  ensureSpace(2);
-  yPosition -= 10;
-  addText(
-    "--------------------------------------------------",
-    50,
-    yPosition,
-    12
-  );
-  yPosition -= 30;
-
-  ensureSpace(3);
-  addText("SUMMARY", 50, yPosition, 20, true);
-  yPosition -= 30;
-
-  const summaryLines = wrapText(resumeData.summary, width - 100, 12);
-  for (const line of summaryLines) {
-    ensureSpace(1);
-    addText(line, 50, yPosition, 12);
-    yPosition -= lineHeight;
-  }
-
-  yPosition -= 40;
-
-  ensureSpace(3);
-  addText("SKILLS", 50, yPosition, 20, true);
-  yPosition -= 30;
-
-  for (const skillGroup of resumeData.skills) {
-    const skillText = `${skillGroup.group}: ${skillGroup.items.join(", ")}`;
-    const skillLines = wrapText(skillText, width - 100, 12);
-    ensureSpace(skillLines.length + 1);
-    for (const line of skillLines) {
-      addText(line, 50, yPosition, 12);
-      yPosition -= lineHeight;
-    }
-  }
-
-  yPosition -= sectionSpacing;
-
-  ensureSpace(3);
-  addText("EXPERIENCE", 50, yPosition, 20, true);
-  yPosition -= 30;
-
-  for (const exp of resumeData.experience) {
-    ensureSpace(3);
-    addText(`${exp.role} at ${exp.company}`, 50, yPosition, 14, true);
-    yPosition -= 15;
-    addText(`${exp.start} - ${exp.end}`, 50, yPosition, 12);
-    yPosition -= 15;
-
-    for (const bullet of exp.bullets) {
-      const bulletLines = wrapText(`• ${bullet}`, width - 100, 12);
-      ensureSpace(bulletLines.length + 1);
-      for (const line of bulletLines) {
-        addText(line, 50, yPosition, 12);
-        yPosition -= lineHeight;
-      }
-    }
-    yPosition -= 10;
-  }
-
-  yPosition -= sectionSpacing;
-
-  if (resumeData.projects.length > 0) {
-    ensureSpace(3);
-    addText("PROJECTS", 50, yPosition, 20, true);
-    yPosition -= 30;
-
-    for (const project of resumeData.projects) {
-      ensureSpace(3);
-      addText(project.name, 50, yPosition, 14, true);
-      yPosition -= 15;
-
-      const descLines = wrapText(project.description, width - 100, 12);
-      ensureSpace(descLines.length + 1);
-      for (const line of descLines) {
-        addText(line, 50, yPosition, 12);
-        yPosition -= lineHeight;
-      }
-
-      for (const bullet of project.bullets) {
-        const bulletLines = wrapText(`• ${bullet}`, width - 100, 12);
-        ensureSpace(bulletLines.length + 1);
-        for (const line of bulletLines) {
-          addText(line, 50, yPosition, 12);
-          yPosition -= lineHeight;
-        }
-      }
-      yPosition -= 10;
-    }
-
-    yPosition -= sectionSpacing;
-  }
-
-  ensureSpace(3);
-  addText("EDUCATION", 50, yPosition, 20, true);
-  yPosition -= 30;
-
-  for (const edu of resumeData.education) {
-    ensureSpace(1.5);
-    let eduText = `${edu.degree} - ${edu.school}`;
-    if (edu.cgpa) {
-      eduText += ` (CGPA: ${edu.cgpa})`;
-    }
-    addText(eduText, 50, yPosition, 12, true);
-    yPosition -= lineHeight;
-  }
-
-  yPosition -= sectionSpacing;
-
-  if (resumeData.certifications && resumeData.certifications.length > 0) {
-    ensureSpace(3);
-    addText("CERTIFICATIONS", 50, yPosition, 20, true);
-    yPosition -= 30;
-
-    for (const cert of resumeData.certifications) {
-      ensureSpace(1.5);
-      addText(`• ${cert}`, 50, yPosition, 12);
-      yPosition -= lineHeight;
-    }
-  }
-
-  return Buffer.from(await pdfDoc.save());
 }

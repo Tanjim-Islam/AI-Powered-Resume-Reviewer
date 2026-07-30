@@ -5,10 +5,10 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { Upload, FileText, X, Loader2 } from "lucide-react";
 import { GlassCard } from "@/components/app-shell";
+import { toast } from "sonner";
 
 const uploadSchema = z
   .object({
@@ -39,6 +39,7 @@ export function UploadForm({ onAnalyze, isLoading }: UploadFormProps) {
     handleSubmit,
     formState: { errors },
     setValue,
+    clearErrors,
     watch,
   } = useForm<UploadFormData>({
     resolver: zodResolver(uploadSchema),
@@ -66,12 +67,15 @@ export function UploadForm({ onAnalyze, isLoading }: UploadFormProps) {
         const file = e.dataTransfer.files[0];
         if (validateFile(file)) {
           setSelectedFile(file);
-          setValue("resumeFile", file);
+          setResumeText("");
+          setValue("resumeText", "");
+          setValue("resumeFile", file, { shouldValidate: true });
+          clearErrors("resumeFile");
           setUseTextInput(false);
         }
       }
     },
-    [setValue]
+    [clearErrors, setValue]
   );
 
   const handleFileInput = useCallback(
@@ -80,12 +84,15 @@ export function UploadForm({ onAnalyze, isLoading }: UploadFormProps) {
         const file = e.target.files[0];
         if (validateFile(file)) {
           setSelectedFile(file);
-          setValue("resumeFile", file);
+          setResumeText("");
+          setValue("resumeText", "");
+          setValue("resumeFile", file, { shouldValidate: true });
+          clearErrors("resumeFile");
           setUseTextInput(false);
         }
       }
     },
-    [setValue]
+    [clearErrors, setValue]
   );
 
   const validateFile = (file: File): boolean => {
@@ -95,12 +102,12 @@ export function UploadForm({ onAnalyze, isLoading }: UploadFormProps) {
     ];
 
     if (!allowedTypes.includes(file.type)) {
-      alert("Please upload a PDF or DOCX file only.");
+      toast.error("Please upload a PDF or DOCX file.");
       return false;
     }
 
     if (file.size > 4 * 1024 * 1024) {
-      alert("File size must be less than 4MB.");
+      toast.error("File size must be less than 4MB.");
       return false;
     }
 
@@ -109,7 +116,7 @@ export function UploadForm({ onAnalyze, isLoading }: UploadFormProps) {
 
   const removeFile = () => {
     setSelectedFile(null);
-    setValue("resumeFile", undefined);
+    setValue("resumeFile", undefined, { shouldValidate: true });
   };
 
   const onSubmit = async (data: UploadFormData) => {
@@ -214,7 +221,13 @@ export function UploadForm({ onAnalyze, isLoading }: UploadFormProps) {
             <Textarea
               placeholder="Paste your resume text here..."
               value={resumeText}
-              onChange={(e) => setResumeText(e.target.value)}
+              onChange={(e) => {
+                setResumeText(e.target.value);
+                setValue("resumeText", e.target.value, {
+                  shouldValidate: true,
+                });
+                clearErrors("resumeFile");
+              }}
               className="min-h-32"
             />
             <p className="text-sm text-gray-500">
@@ -229,9 +242,16 @@ export function UploadForm({ onAnalyze, isLoading }: UploadFormProps) {
             type="button"
             variant="ghost"
             onClick={() => {
-              setUseTextInput(!useTextInput);
-              if (useTextInput) {
-                removeFile();
+              const nextUseTextInput = !useTextInput;
+              setUseTextInput(nextUseTextInput);
+              if (nextUseTextInput) {
+                setSelectedFile(null);
+                setValue("resumeFile", undefined);
+                clearErrors("resumeFile");
+              } else {
+                setResumeText("");
+                setValue("resumeText", "");
+                clearErrors("resumeFile");
               }
             }}
             className="text-teal-600 hover:text-teal-700"

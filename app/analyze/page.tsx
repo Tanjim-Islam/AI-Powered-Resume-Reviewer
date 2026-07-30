@@ -27,10 +27,13 @@ import {
 } from "lucide-react";
 import { AnalyzeResponse } from "@/lib/schemas";
 import { toast } from "sonner";
+import { readApiResponse } from "@/lib/api-response";
 
 type AnalyzeWithSource = AnalyzeResponse & {
   original_resume_text?: string;
   job_description?: string;
+  analysis_id?: string | null;
+  resume_name?: string;
 };
 
 function AnalyzePageContent() {
@@ -41,22 +44,70 @@ function AnalyzePageContent() {
   const downloadMenuRef = useRef<HTMLDivElement | null>(null);
   const searchParams = useSearchParams();
   const action = searchParams.get("action");
+  const historyId = searchParams.get("id");
 
   useEffect(() => {
-    // Check if this is a sample analysis request
-    if (action === "sample") {
-      // Load sample data
-      setAnalysis(getSampleAnalysis());
-      setIsLoading(false);
-    } else {
-      // Get analysis from sessionStorage for real analysis
-      const storedAnalysis = sessionStorage.getItem("resumeAnalysis");
-      if (storedAnalysis) {
-        setAnalysis(JSON.parse(storedAnalysis));
+    let active = true;
+
+    const loadAnalysis = async () => {
+      setIsLoading(true);
+
+      if (action === "sample") {
+        if (active) {
+          setAnalysis(getSampleAnalysis());
+          setIsLoading(false);
+        }
+        return;
       }
-      setIsLoading(false);
-    }
-  }, [action]);
+
+      if (historyId) {
+        try {
+          const response = await fetch(`/api/history/${historyId}`, {
+            cache: "no-store",
+          });
+          const savedAnalysis = await readApiResponse<AnalyzeWithSource>(
+            response,
+            "Could not load this review."
+          );
+          if (active) {
+            setAnalysis(savedAnalysis);
+          }
+        } catch (error) {
+          if (active) {
+            toast.error(
+              error instanceof Error
+                ? error.message
+                : "Could not load this review."
+            );
+          }
+        } finally {
+          if (active) {
+            setIsLoading(false);
+          }
+        }
+        return;
+      }
+
+      try {
+        const storedAnalysis = sessionStorage.getItem("resumeAnalysis");
+        if (storedAnalysis && active) {
+          setAnalysis(JSON.parse(storedAnalysis));
+        }
+      } catch {
+        sessionStorage.removeItem("resumeAnalysis");
+      } finally {
+        if (active) {
+          setIsLoading(false);
+        }
+      }
+    };
+
+    void loadAnalysis();
+
+    return () => {
+      active = false;
+    };
+  }, [action, historyId]);
 
   useEffect(() => {
     function onDocClick(e: MouseEvent) {
@@ -158,17 +209,21 @@ function AnalyzePageContent() {
           resumeText: analysis.original_resume_text,
           jobDescription: analysis.job_description || undefined,
           analysis,
+          analysisId: analysis.analysis_id || undefined,
+          resumeName: analysis.resume_name || "Resume",
         }),
       });
 
-      if (!response.ok) {
-        const err = await response.json().catch(() => ({}));
-        throw new Error(err.error || "Rewrite failed");
-      }
-
-      const data = await response.json();
+      const data = await readApiResponse<{
+        rewrite_id?: string | null;
+      }>(
+        response,
+        "Resume rewriting is temporarily unavailable. Please try again."
+      );
       sessionStorage.setItem("rewriteResult", JSON.stringify(data));
-      window.location.href = "/rewrite";
+      window.location.href = data.rewrite_id
+        ? `/rewrite?id=${data.rewrite_id}`
+        : "/rewrite";
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Rewrite failed", {
         position: "top-center",

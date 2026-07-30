@@ -19,6 +19,7 @@
 
 # production
 /build
+/public/siglum-worker.js
 
 # misc
 .DS_Store

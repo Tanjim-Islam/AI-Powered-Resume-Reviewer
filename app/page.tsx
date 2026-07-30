@@ -4,9 +4,12 @@ import { useState } from "react";
 import { AppShell } from "@/components/app-shell";
 import { UploadForm } from "@/components/upload-form";
 import { Button } from "@/components/ui/button";
-import { FileText, BarChart3, Sparkles } from "lucide-react";
+import { BarChart3, Sparkles } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useAnimations } from "@/hooks/use-animations";
+import { toast } from "sonner";
+import { readApiResponse } from "@/lib/api-response";
+import type { AnalyzeResponse } from "@/lib/schemas";
 
 export default function Home() {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -23,12 +26,10 @@ export default function Home() {
         body: formData,
       });
 
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || "Analysis failed");
-      }
-
-      const analysis = await response.json();
+      const analysis = await readApiResponse<AnalyzeResponse>(
+        response,
+        "Resume analysis is temporarily unavailable. Please try again."
+      );
 
       // Store analysis in sessionStorage for the results page
       sessionStorage.setItem("resumeAnalysis", JSON.stringify(analysis));
@@ -37,7 +38,11 @@ export default function Home() {
       router.push("/analyze");
     } catch (error) {
       console.error("Analysis error:", error);
-      alert(error instanceof Error ? error.message : "Analysis failed");
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Resume analysis is temporarily unavailable. Please try again."
+      );
     } finally {
       setIsAnalyzing(false);
     }

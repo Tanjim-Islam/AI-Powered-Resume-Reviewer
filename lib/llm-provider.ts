@@ -11,6 +11,7 @@ interface LLMConfig {
 
 class LLMProvider {
   private config: LLMConfig;
+  private readonly requestTimeoutMs = 45_000;
 
   constructor() {
     this.config = {
@@ -83,15 +84,13 @@ class LLMProvider {
         try {
           // Remove any markdown code blocks if present
           const cleanedResponse = response
-            .replace(/```json\n?|\n?```/g, "")
+            .replace(/^```(?:json)?\s*/i, "")
+            .replace(/\s*```$/i, "")
             .trim();
           jsonResponse = JSON.parse(cleanedResponse);
         } catch (parseError) {
           console.error("Failed to parse JSON response:", parseError);
-          if (currentAttempt === maxRetries) {
-            throw new Error("Invalid JSON response from LLM");
-          }
-          continue;
+          throw new Error("Invalid JSON response from LLM");
         }
 
         // Validate against schema
@@ -152,7 +151,7 @@ class LLMProvider {
     systemPrompt: string,
     userPrompt: string
   ): Promise<string> {
-    const response = await fetch(
+    const response = await this.fetchWithTimeout(
       `${this.config.openrouterBaseUrl}/chat/completions`,
       {
         method: "POST",
@@ -194,23 +193,28 @@ class LLMProvider {
     }
 
     // Use the latest API endpoint format
-    const apiUrl = `https://generativelanguage.googleapis.com/v1/models/${this.config.geminiModel}:generateContent?key=${this.config.geminiApiKey}`;
+    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${this.config.geminiModel}:generateContent?key=${this.config.geminiApiKey}`;
 
     console.log(`Calling Gemini API: ${this.config.geminiModel}`);
 
-    const response = await fetch(apiUrl, {
+    const response = await this.fetchWithTimeout(apiUrl, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
+        systemInstruction: {
+          parts: [{ text: systemPrompt }],
+        },
         contents: [
           {
-            parts: [{ text: systemPrompt }, { text: userPrompt }],
+            role: "user",
+            parts: [{ text: userPrompt }],
           },
         ],
         generationConfig: {
           temperature: 0.2,
+          responseMimeType: "application/json",
         },
       }),
     });
@@ -241,6 +245,23 @@ class LLMProvider {
     }
 
     return data.candidates[0]?.content?.parts[0]?.text || "";
+  }
+
+  private async fetchWithTimeout(
+    input: string,
+    init: RequestInit
+  ): Promise<Response> {
+    try {
+      return await fetch(input, {
+        ...init,
+        signal: AbortSignal.timeout(this.requestTimeoutMs),
+      });
+    } catch (error) {
+      if (error instanceof Error && error.name === "TimeoutError") {
+        throw new Error("AI service timed out. Please try again.");
+      }
+      throw error;
+    }
   }
 }
 

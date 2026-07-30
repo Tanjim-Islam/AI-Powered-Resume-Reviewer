@@ -2,7 +2,6 @@
 
 import { AppShell } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import Link from "next/link";
 import { FileText, Target, CheckCircle, AlertCircle } from "lucide-react";
 

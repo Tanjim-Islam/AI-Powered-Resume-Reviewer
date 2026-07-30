@@ -204,7 +204,7 @@ export const initPageAnimations = () => {
   // Animate elements with data-animate attribute
   const animatedElements = document.querySelectorAll("[data-animate]");
 
-  animatedElements.forEach((element, index) => {
+  animatedElements.forEach((element) => {
     const animationType = element.getAttribute("data-animate");
     const delay = parseFloat(element.getAttribute("data-delay") || "0");
 
