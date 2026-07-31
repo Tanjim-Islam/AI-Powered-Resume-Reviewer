@@ -18,6 +18,7 @@ export class LatexCompileError extends Error {
 }
 
 let compilerPromise: Promise<SiglumCompiler> | null = null;
+let compileQueue: Promise<void> = Promise.resolve();
 let progressListener:
   | ((progress: LatexCompileProgress) => void)
   | null = null;
@@ -78,6 +79,13 @@ export async function compileLatexToPdf({
   photo?: Uint8Array | null;
   onProgress?: (progress: LatexCompileProgress) => void;
 }): Promise<{ pdf: Uint8Array; log: string }> {
+  let releaseCompile = () => {};
+  const previousCompile = compileQueue;
+  compileQueue = new Promise<void>((resolve) => {
+    releaseCompile = resolve;
+  });
+  await previousCompile;
+
   progressListener = onProgress ?? null;
   compilerLogBuffer = [];
 
@@ -114,6 +122,7 @@ export async function compileLatexToPdf({
     );
   } finally {
     progressListener = null;
+    releaseCompile();
   }
 }
 

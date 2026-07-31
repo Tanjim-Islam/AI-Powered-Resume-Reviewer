@@ -23,6 +23,8 @@ type NormalizedExternalUrl = {
 const serviceLabels: ReadonlyArray<[string, string]> = [
   ["linkedin.com", "LinkedIn"],
   ["github.com", "GitHub"],
+  ["huggingface.co", "Hugging Face"],
+  ["scholar.google.com", "Google Scholar"],
   ["gitlab.com", "GitLab"],
   ["behance.net", "Behance"],
   ["dribbble.com", "Dribbble"],

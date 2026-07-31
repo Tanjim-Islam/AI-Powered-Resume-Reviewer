@@ -92,6 +92,16 @@ export function StructuredResumeEditor({
     onChange({ ...value, [key]: splitLines(text) });
   };
 
+  const updateHeaderLinks = (text: string) => {
+    onChange({
+      ...value,
+      header: {
+        ...value.header,
+        links: splitLines(text),
+      },
+    });
+  };
+
   return (
     <div className="space-y-5">
       <SectionCard title="Contact">
@@ -131,6 +141,17 @@ export function StructuredResumeEditor({
             value={value.header.portfolio ?? ""}
             onChange={(nextValue) => updateHeader("portfolio", nextValue)}
           />
+          <label className="space-y-1.5 sm:col-span-2">
+            <span className="text-sm font-medium text-gray-700">
+              Additional profile links
+            </span>
+            <Textarea
+              value={(value.header.links ?? []).join("\n")}
+              onChange={(event) => updateHeaderLinks(event.target.value)}
+              placeholder={"GitHub, Hugging Face, Google Scholar, or another URL\nOne URL per line"}
+              className="min-h-24 border-gray-200 bg-white"
+            />
+          </label>
         </div>
       </SectionCard>
 

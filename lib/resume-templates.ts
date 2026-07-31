@@ -378,7 +378,9 @@ function latexContactItem(item: ResumeContactItem): string {
   const text = escapeLatex(item.text);
   if (!item.href) return text;
 
-  return `\\href{${escapeLatexHref(item.href)}}{\\textcolor{ResumeLink}{${text}}}`;
+  const linkedText = item.kind === "email" ? text : `\\mbox{${text}}`;
+
+  return `\\href{${escapeLatexHref(item.href)}}{\\textcolor{ResumeLink}{${linkedText}}}`;
 }
 
 function contactLine(data: ResumeData): string {
@@ -479,6 +481,53 @@ export function upgradeResumeLatexContacts(
     }
   }
 
+  const legacySplitHeader = `\\begin{minipage}[t]{0.61\\textwidth}
+{\\Huge\\bfseries`;
+  const responsiveSplitHeader = `\\begin{minipage}[t]{0.61\\textwidth}
+\\raggedright
+{\\LARGE\\bfseries`;
+  upgraded = upgraded.replace(legacySplitHeader, responsiveSplitHeader);
+
+  const legacySidebarStart = `\\begin{minipage}[t]{0.29\\textwidth}
+\\raggedright
+\\colorbox{ResumeSoft}{\\parbox[t]{\\dimexpr\\linewidth-2\\fboxsep}{%`;
+  const legacySidebarSwitch = `}}
+\\end{minipage}\\hfill
+\\begin{minipage}[t]{0.67\\textwidth}
+\\raggedright`;
+
+  if (
+    upgraded.includes(legacySidebarStart) &&
+    upgraded.includes(legacySidebarSwitch)
+  ) {
+    const documentStart = "\\begin{document}\n";
+    const sidebarStart = `\\par\\vspace{6pt}\n${legacySidebarStart}`;
+    const documentStartIndex = upgraded.indexOf(documentStart);
+    const sidebarStartIndex = upgraded.indexOf(sidebarStart);
+
+    if (
+      documentStartIndex >= 0 &&
+      sidebarStartIndex > documentStartIndex
+    ) {
+      const headerStartIndex = documentStartIndex + documentStart.length;
+      const header = upgraded.slice(headerStartIndex, sidebarStartIndex);
+      upgraded = `${upgraded.slice(0, documentStartIndex)}\\setlength{\\columnsep}{0.28in}
+\\newcommand{\\ResumeHeader}{%
+${header}
+}
+\\begin{document}
+\\twocolumn[\\ResumeHeader\\par\\vspace{6pt}]
+\\raggedright${upgraded.slice(
+        sidebarStartIndex + sidebarStart.length
+      )}`
+        .replace(legacySidebarSwitch, "\\newpage\n\\raggedright")
+        .replace(
+          "\\end{minipage}\n\\end{document}",
+          "\\end{document}"
+        );
+    }
+  }
+
   if (
     upgraded !== source &&
     !upgraded.includes("\\definecolor{ResumeLink}")
@@ -547,7 +596,7 @@ function standardExperience(
 ): string {
   return data.experience
     .map(
-      (entry) => `\\begin{tabularx}{${width}}{@{}Xr@{}}
+      (entry) => `\\begin{tabularx}{${width}}{@{}X@{\\hspace{0.8em}}r@{}}
 \\textbf{${escapeLatex(entry.role)}} at \\textbf{${escapeLatex(
         entry.company
       )}} & ${escapeLatex(nonEmpty([entry.start, entry.end]).join(" -- "))} \\\\
@@ -582,7 +631,7 @@ function standardEducation(
 ): string {
   return data.education
     .map(
-      (education) => `\\begin{tabularx}{${width}}{@{}Xr@{}}
+      (education) => `\\begin{tabularx}{${width}}{@{}X@{\\hspace{0.8em}}r@{}}
 \\textbf{${escapeLatex(education.degree)}} & ${escapeLatex(
         education.year
       )} \\\\
@@ -756,7 +805,8 @@ ${title ? `{\\large\\color{ResumeAccent}${title}}\\\\[3pt]` : ""}
 
   if (style === "split") {
     return `\\begin{minipage}[t]{0.61\\textwidth}
-{\\Huge\\bfseries ${name}}\\\\[3pt]
+\\raggedright
+{\\LARGE\\bfseries ${name}}\\\\[3pt]
 ${title ? `{\\large\\color{ResumeAccent}${title}}` : ""}
 \\end{minipage}\\hfill
 \\begin{minipage}[t]{0.35\\textwidth}
@@ -1113,14 +1163,15 @@ function renderOriginalSidebar(
   })}
 \\definecolor{ResumeAccent}{HTML}{${config.accent}}
 \\definecolor{ResumeSoft}{HTML}{${config.soft}}
-\\newcommand{\\SideSection}[1]{\\par\\vspace{7pt}{\\small\\bfseries\\color{ResumeAccent}\\MakeUppercase{#1}}\\par\\vspace{2pt}}
+\\newcommand{\\SideSection}[1]{\\par\\vspace{7pt}\\colorbox{ResumeSoft}{\\parbox{\\dimexpr\\linewidth-2\\fboxsep}{\\small\\bfseries\\color{ResumeAccent}\\MakeUppercase{#1}}}\\par\\vspace{3pt}}
 \\newcommand{\\MainSection}[1]{\\par\\vspace{8pt}{\\large\\bfseries\\color{ResumeAccent}#1}\\par\\vspace{2pt}{\\color{ResumeAccent}\\hrule}\\vspace{4pt}}
-\\begin{document}
+\\setlength{\\columnsep}{0.28in}
+\\newcommand{\\ResumeHeader}{%
 ${originalHeader(data, config.header)}
-\\par\\vspace{6pt}
-\\begin{minipage}[t]{0.29\\textwidth}
+}
+\\begin{document}
+\\twocolumn[\\ResumeHeader\\par\\vspace{6pt}]
 \\raggedright
-\\colorbox{ResumeSoft}{\\parbox[t]{\\dimexpr\\linewidth-2\\fboxsep}{%
 ${orderedSections(
   data,
   config.leftOrder,
@@ -1128,9 +1179,7 @@ ${orderedSections(
   "\\SideSection",
   "\\linewidth"
 )}
-}}
-\\end{minipage}\\hfill
-\\begin{minipage}[t]{0.67\\textwidth}
+\\newpage
 \\raggedright
 ${orderedSections(
   data,
@@ -1139,7 +1188,6 @@ ${orderedSections(
   "\\MainSection",
   "\\linewidth"
 )}
-\\end{minipage}
 \\end{document}`;
 }
 

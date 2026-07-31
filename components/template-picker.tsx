@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { Check, ExternalLink, ImageIcon } from "lucide-react";
+import { Check, ExternalLink, Eye, ImageIcon } from "lucide-react";
+import { TemplatePreviewDialog } from "@/components/template-preview-dialog";
 import { cn } from "@/lib/utils";
 import {
   getResumeTemplate,
@@ -91,6 +92,8 @@ export function TemplatePicker({
   const [category, setCategory] = useState<
     ResumeTemplateCategory | "all"
   >("all");
+  const [previewTemplateId, setPreviewTemplateId] =
+    useState<ResumeTemplateId | null>(null);
   const visibleTemplates =
     category === "all"
       ? resumeTemplates
@@ -135,40 +138,53 @@ export function TemplatePicker({
         {visibleTemplates.map((template) => {
           const selected = template.id === value;
           return (
-            <button
+            <div
               key={template.id}
-              type="button"
-              aria-pressed={selected}
-              onClick={() => onChange(template.id)}
               className={cn(
-                "group rounded-xl border p-2 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500",
+                "group relative rounded-xl border p-2 transition focus-within:ring-2 focus-within:ring-teal-500",
                 selected
                   ? "border-teal-500 bg-teal-50/70 shadow-sm"
                   : "border-gray-200 bg-white/75 hover:border-teal-300 hover:bg-white"
               )}
             >
-              <TemplateMiniature template={template} />
-              <div className="flex items-start gap-2 px-1 pb-1 pt-2.5">
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold text-gray-900">
-                    {template.shortName}
-                  </p>
-                  <p className="mt-0.5 line-clamp-2 text-xs leading-4 text-gray-500">
-                    {template.recommendedFor}
-                  </p>
+              <button
+                type="button"
+                aria-pressed={selected}
+                onClick={() => onChange(template.id)}
+                className="w-full rounded-lg text-left focus-visible:outline-none"
+              >
+                <TemplateMiniature template={template} />
+                <div className="flex items-start gap-2 px-1 pb-1 pt-2.5">
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-semibold text-gray-900">
+                      {template.shortName}
+                    </p>
+                    <p className="mt-0.5 line-clamp-2 text-xs leading-4 text-gray-500">
+                      {template.recommendedFor}
+                    </p>
+                  </div>
+                  <span
+                    className={cn(
+                      "mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full border",
+                      selected
+                        ? "border-teal-600 bg-teal-600 text-white"
+                        : "border-gray-200 text-transparent"
+                    )}
+                  >
+                    <Check className="size-3" />
+                  </span>
                 </div>
-                <span
-                  className={cn(
-                    "mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full border",
-                    selected
-                      ? "border-teal-600 bg-teal-600 text-white"
-                      : "border-gray-200 text-transparent"
-                  )}
-                >
-                  <Check className="size-3" />
-                </span>
-              </div>
-            </button>
+              </button>
+              <button
+                type="button"
+                onClick={() => setPreviewTemplateId(template.id)}
+                aria-label={`Preview ${template.name}`}
+                className="absolute bottom-[4.55rem] right-3 inline-flex items-center gap-1 rounded-full border border-white/90 bg-slate-950/80 px-2.5 py-1 text-[11px] font-semibold text-white shadow-md backdrop-blur-sm transition hover:bg-teal-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+              >
+                <Eye className="size-3" />
+                Preview
+              </button>
+            </div>
           );
         })}
       </div>
@@ -194,6 +210,13 @@ export function TemplatePicker({
           )}
         </div>
       </details>
+
+      {previewTemplateId && (
+        <TemplatePreviewDialog
+          template={getResumeTemplate(previewTemplateId)}
+          onClose={() => setPreviewTemplateId(null)}
+        />
+      )}
     </div>
   );
 }
