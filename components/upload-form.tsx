@@ -162,10 +162,13 @@ export function UploadForm({ onAnalyze, isLoading }: UploadFormProps) {
           >
             {selectedFile ? (
               <div className="space-y-4">
-                <div className="flex items-center justify-center space-x-2">
-                  <FileText className="w-8 h-8 text-teal-600" />
-                  <div className="text-left">
-                    <p className="font-medium text-gray-800">
+                <div className="flex min-w-0 items-center gap-2">
+                  <FileText className="h-8 w-8 shrink-0 text-teal-600" />
+                  <div className="min-w-0 flex-1 text-left">
+                    <p
+                      className="line-clamp-2 break-all font-medium text-gray-800"
+                      title={selectedFile.name}
+                    >
                       {selectedFile.name}
                     </p>
                     <p className="text-sm text-gray-500">
@@ -177,7 +180,7 @@ export function UploadForm({ onAnalyze, isLoading }: UploadFormProps) {
                     variant="ghost"
                     size="sm"
                     onClick={removeFile}
-                    className="text-gray-400 hover:text-red-500"
+                    className="shrink-0 text-gray-400 hover:text-red-500"
                   >
                     <X className="w-4 h-4" />
                   </Button>

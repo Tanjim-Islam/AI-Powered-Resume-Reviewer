@@ -134,14 +134,21 @@ export const progressBarAnimation = (
 export const textReveal = (element: HTMLElement, delay: number = 0) => {
   const text = element.textContent || "";
   element.innerHTML = text
-    .split("")
+    .trim()
+    .split(/\s+/)
     .map(
-      (char) =>
-        `<span class="inline-block">${char === " " ? "&nbsp;" : char}</span>`
+      (word) =>
+        `<span class="inline-block whitespace-nowrap">${word
+          .split("")
+          .map(
+            (char) =>
+              `<span class="inline-block" data-reveal-character>${char}</span>`
+          )
+          .join("")}</span>`
     )
-    .join("");
+    .join(" ");
 
-  const spans = element.querySelectorAll("span");
+  const spans = element.querySelectorAll("[data-reveal-character]");
 
   gsap.set(spans, { opacity: 0, y: 20 });
 

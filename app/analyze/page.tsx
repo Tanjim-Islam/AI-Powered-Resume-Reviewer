@@ -573,7 +573,7 @@ function AnalyzePageContent() {
         <div className="flex flex-col sm:flex-row gap-4 justify-center">
           <Button
             size="lg"
-            className={`bg-teal-600 hover:bg-teal-700 text-white px-8 py-3 ${
+            className={`w-full bg-teal-600 px-8 py-3 text-white hover:bg-teal-700 sm:w-64 ${
               action === "sample" ? "opacity-70 cursor-not-allowed" : ""
             }`}
             onClick={handleRewriteFull}
@@ -590,11 +590,11 @@ function AnalyzePageContent() {
               </>
             )}
           </Button>
-          <div className="relative" ref={downloadMenuRef}>
+          <div className="relative w-full sm:w-64" ref={downloadMenuRef}>
             <Button
               variant="outline"
               size="lg"
-              className="border-teal-600 text-teal-600 hover:bg-teal-50 px-8 py-3"
+              className="w-full border-teal-600 px-8 py-3 text-teal-600 hover:bg-teal-50"
               onClick={() => setShowDownloadMenu((s) => !s)}
             >
               <Download className="w-5 h-5 mr-2" />
