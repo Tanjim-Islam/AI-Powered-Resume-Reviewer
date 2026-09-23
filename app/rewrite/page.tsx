@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { readApiResponse } from "@/lib/api-response";
+import { prewarmLatexCompiler } from "@/lib/latex-compiler";
 import type {
   ResumeData,
   ResumeRewriteSave,
@@ -80,6 +81,7 @@ function RewritePageContent() {
 
     setIsRewriting(true);
     setError(null);
+    prewarmLatexCompiler();
 
     try {
       const response = await fetch("/api/rewrite", {

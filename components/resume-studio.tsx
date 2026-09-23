@@ -32,7 +32,6 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   compileLatexToPdf,
   LatexCompileError,
-  prewarmLatexCompiler,
   type LatexCompileProgress,
 } from "@/lib/latex-compiler";
 import { blobToUint8Array, prepareResumePhoto } from "@/lib/resume-photo";
@@ -81,6 +80,90 @@ function compactCompileError(log: string): string {
     );
 
   return relevantLine?.replace(/^!\s*/, "") || "Check the LaTeX code and try again.";
+}
+
+function RenderPdfButton({
+  active,
+  highlight,
+  isCompiling,
+  onClick,
+}: {
+  active: boolean;
+  highlight: boolean;
+  isCompiling: boolean;
+  onClick: () => void;
+}) {
+  const buttonRef = useRef<HTMLButtonElement | null>(null);
+
+  useEffect(() => {
+    if (
+      !active ||
+      !highlight ||
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    ) {
+      return;
+    }
+
+    const button = buttonRef.current;
+    if (!button) return;
+
+    let activeEffect = true;
+    let pulse: { kill: () => void } | null = null;
+    let reset: (() => void) | null = null;
+
+    void import("gsap")
+      .then(({ gsap }) => {
+        if (!activeEffect) return;
+        reset = () => {
+          gsap.set(button, { clearProps: "transform,boxShadow" });
+        };
+        pulse = gsap.fromTo(
+          button,
+          { scale: 1, boxShadow: "0 0 0 0 rgba(13, 148, 136, 0)" },
+          {
+            scale: 1.04,
+            boxShadow: "0 0 0 8px rgba(13, 148, 136, 0.2)",
+            duration: 0.65,
+            repeat: 3,
+            yoyo: true,
+            ease: "sine.inOut",
+            onComplete: () => reset?.(),
+          },
+        );
+      })
+      .catch(() => {
+        // The steady highlight still works if the animation cannot load.
+      });
+
+    return () => {
+      activeEffect = false;
+      pulse?.kill();
+      reset?.();
+    };
+  }, [active, highlight]);
+
+  return (
+    <Button
+      ref={buttonRef}
+      type="button"
+      variant="outline"
+      size="sm"
+      onClick={onClick}
+      disabled={isCompiling}
+      className={
+        highlight
+          ? "border-teal-500 bg-teal-600 text-white ring-4 ring-teal-200/80 shadow-lg shadow-teal-500/30 hover:border-teal-600 hover:bg-teal-700 hover:text-white"
+          : undefined
+      }
+    >
+      {isCompiling ? (
+        <Loader2 className="size-4 animate-spin" />
+      ) : (
+        <RefreshCw className="size-4" />
+      )}
+      {isCompiling ? "Rendering" : "Render PDF"}
+    </Button>
+  );
 }
 
 export function ResumeStudio({
@@ -136,10 +219,7 @@ export function ResumeStudio({
     [resumeData]
   );
   const pdfIsStale = compiledSource !== latexSource;
-
-  useEffect(() => {
-    prewarmLatexCompiler();
-  }, []);
+  const highlightRenderButton = pdfIsStale && Boolean(pdfUrl) && !isCompiling;
 
   useEffect(() => {
     return () => {
@@ -453,25 +533,17 @@ export function ResumeStudio({
                 </p>
                 <p className="text-xs text-gray-500">
                   {pdfIsStale && pdfUrl
-                    ? "Preview needs an update"
+                    ? "Preview needs an update. Render PDF to see your changes."
                     : "Compiled in your browser"}
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
+                <RenderPdfButton
+                  active={activeTab === "preview"}
+                  highlight={highlightRenderButton}
+                  isCompiling={isCompiling}
                   onClick={() => void compileCurrent()}
-                  disabled={isCompiling}
-                >
-                  {isCompiling ? (
-                    <Loader2 className="size-4 animate-spin" />
-                  ) : (
-                    <RefreshCw className="size-4" />
-                  )}
-                  {isCompiling ? "Rendering" : "Render PDF"}
-                </Button>
+                />
                 <Button
                   type="button"
                   size="sm"

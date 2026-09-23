@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, Suspense } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -28,6 +28,7 @@ import {
 import { AnalyzeResponse } from "@/lib/schemas";
 import { toast } from "sonner";
 import { readApiResponse } from "@/lib/api-response";
+import { prewarmLatexCompiler } from "@/lib/latex-compiler";
 
 type AnalyzeWithSource = AnalyzeResponse & {
   original_resume_text?: string;
@@ -37,6 +38,7 @@ type AnalyzeWithSource = AnalyzeResponse & {
 };
 
 function AnalyzePageContent() {
+  const router = useRouter();
   const [analysis, setAnalysis] = useState<AnalyzeWithSource | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isRewriting, setIsRewriting] = useState(false);
@@ -201,6 +203,7 @@ function AnalyzePageContent() {
     }
 
     setIsRewriting(true);
+    prewarmLatexCompiler();
     try {
       const response = await fetch("/api/rewrite", {
         method: "POST",
@@ -221,9 +224,9 @@ function AnalyzePageContent() {
         "Resume rewriting is temporarily unavailable. Please try again."
       );
       sessionStorage.setItem("rewriteResult", JSON.stringify(data));
-      window.location.href = data.rewrite_id
-        ? `/rewrite?id=${data.rewrite_id}`
-        : "/rewrite";
+      router.push(
+        data.rewrite_id ? `/rewrite?id=${data.rewrite_id}` : "/rewrite"
+      );
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Rewrite failed", {
         position: "top-center",
